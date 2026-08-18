@@ -1,0 +1,2130 @@
+{% extends "base_page.html" %}
+
+{% block title %}Classroom{% endblock %}
+
+{% block container %}
+
+<style>
+    .educat-primary-header {
+        background: #86bc42 !important;
+        color: #ffffff !important;
+        padding: 12px 18px;
+        font-weight: 600;
+        border-radius: 4px 4px 0 0;
+    }
+
+    .student-stats {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+
+    .student-stats-header {
+        background: #86bc42;
+        color: #fff;
+        padding: 12px 15px;
+        font-weight: 600;
+    }
+
+    .student-stats-body {
+        padding: 12px 15px;
+    }
+
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 7px 0;
+        border-bottom: 1px solid #f1f1f1;
+    }
+
+    .file-tree {
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        max-height: 78vh;
+        overflow-y: auto;
+        font-size: 0.92rem;
+        line-height: 1.35;
+    }
+
+    .node-header {
+        display: flex;
+        align-items: center;
+        padding: 6px 10px;
+        border-radius: 3px;
+        cursor: pointer;
+    }
+
+    .node-header:hover {
+        background: #e9f0ff;
+    }
+
+    .toggle-icon {
+        transition: transform 0.2s ease;
+    }
+
+    .tree-node.open > .node-header .toggle-icon {
+        transform: rotate(90deg);
+    }
+
+    .children {
+        display: none;
+        padding-left: 22px;
+    }
+
+    .tree-node.open > .children {
+        display: block;
+    }
+
+    .theme-node {
+        cursor: pointer;
+    }
+
+    .classroom-main {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        min-height: 78vh;
+    }
+
+    .exercise-header {
+        background: #2d3e50 !important;
+        color: #ffffff !important;
+        padding: 18px 20px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    /* === Универсальные стили состояний === */
+    .file-tree .completed span {
+        color: #2e7d32;
+        font-weight: 600;
+    }
+
+    .file-tree .completed i {
+        color: #4caf50;
+    }
+
+    .file-tree .current i {
+        color: #1565c0;
+    }
+
+    .file-tree .theme-node.completed .node-header:hover {
+        background-color: #c8e6c9;
+    }
+
+    .file-tree .locked {
+        opacity: 0.50;
+    }
+
+    .file-tree .locked span {
+        color: #6c757d;
+    }
+
+    .file-tree .locked .node-header {
+        cursor: not-allowed;
+    }
+
+    .file-tree .locked .node-header:hover {
+        background: transparent;
+    }
+
+
+    /* тема current */
+    .tree-node.theme-node.current > .node-header span {
+        color: #1565c0;
+        font-weight: 600;
+        background-color: #e3f2fd;
+
+    }
+
+    /* урок current */
+    .tree-node.current:not(.theme-node) > .node-header span {
+        color: #1565c0;
+        font-weight: 600;
+        background-color: #e3f2fd;
+    }
+
+    .btn-auto-fit {
+        width: auto !important;
+    }
+
+    /* === Стили таблицы статистики упражнений === */
+    .exercise-stats-table {
+        font-size: 0.9rem;
+        margin: 0 auto;
+        max-width: 520px;
+    }
+
+    .exercise-stats-table th {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        text-align: center;
+        vertical-align: middle;
+        padding: 8px 12px;
+    }
+
+    .exercise-stats-table td {
+        vertical-align: middle;
+        padding: 8px 12px;
+    }
+
+    .exercise-stats-table td:first-child {
+        text-align: left;
+        font-weight: 500;
+    }
+
+    .exercise-stats-table td:not(:first-child) {
+        text-align: center;
+        width: 90px;
+    }
+
+    .exercise-stats-table .table-light th {
+        background-color: #e9ecef;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    /* ==================== EXERCISE PLAYER ==================== */
+
+    .exercise-player {
+        font-size: 1.05rem;
+    }
+
+    .question-container {
+        font-size: 1.35rem;
+        line-height: 2.5;
+        background: #f8f9fa;
+    }
+
+    .answer-slot {
+        display: inline-block;
+        min-width: 120px;
+        min-height: 38px;
+        border: 2px dashed #86bc42;
+        border-radius: 6px;
+        margin: 0 4px;
+        vertical-align: middle;
+        text-align: center;
+        line-height: 34px;
+        background: #fff;
+        transition: all 0.3s ease;
+    }
+
+    .answer-slot.filled {
+        min-width: 0;
+        width: auto;
+        padding: 0 12px;
+        border-style: solid;
+        background: #e8f5e9;
+        border-color: #86bc42;
+        text-align: center;
+        transition: all 1.1s ease;
+    }
+
+    .answer-slot.wrong-answer {
+        border-color: #dc3545;
+        background: #fff0f0;
+        animation: shake 0.6s ease;
+    }
+
+    .variant-box {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 14px;
+        border: 2px solid #2d3e50;
+        border-radius: 8px;
+        background: #fff;
+        cursor: grab;
+        user-select: none;
+        transition: all 0.2s ease;
+        white-space: nowrap;           /* текст не переносится */
+        min-width: auto;               /* убираем жёсткую минимальную ширину */
+        width: fit-content;            /* ширина по содержимому */
+        margin: 3px 4px;                /* небольшой отступ между кнопками */
+        font-size: 18px;
+    }
+
+    .variant-box:hover {
+        background: #f0f4ff;
+        border-color: #4a6fa5;
+        transform: translateY(-1px);
+    }
+
+    .variant-box:active {
+        cursor: grabbing;
+    }
+
+    .variant-box.used {
+        opacity: 0.35;
+        pointer-events: none;
+        background: #f8f9fa;
+    }
+
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        20%, 60% { transform: translateX(-5px); }
+        40%, 80% { transform: translateX(5px); }
+    }
+
+    @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        20%, 60% { transform: translateX(-6px); }
+        40%, 80% { transform: translateX(6px); }
+    }
+
+    /* подсветка активного слота */
+    .answer-slot.active-slot {
+        outline: 2px solid #86bc42;
+        background: #f4fbe8;
+    }
+
+</style>
+
+<!-- Breadcrumb -->
+<div class="breadcrumb-banner-area"
+     style="background: rgba(0,0,0,0) url('/static/img/banner/4.jpg') no-repeat scroll 0 0; background-size: cover;">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="breadcrumb-text">
+                    <h1 class="text-center">{{ _("CLASSROOM") }}</h1>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="section-padding">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-1 col-12 mb-30"></div>
+
+            <!-- LEFT: Tree -->
+            <div class="col-lg-3 col-12 mb-30">
+                <div class="student-stats">
+                    <div class="student-stats-header educat-primary-header">
+                        Мой аккаунт
+                    </div>
+                    <div class="student-stats-body">
+                        <div class="stat-row">
+                            <span><i class="zmdi zmdi-star-circle"></i> {{ access_level_name }} доступ</span>
+                            {% if access_until %}
+                                <span>до {{ access_until }}</span>
+                            {% else %}
+                                <span>бессрочно</span>
+                            {% endif %}
+                            <span data-user-access-level="{{ access_level }}"
+                                  data-user-role="{{ role }}"
+                                  class="d-none"></span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label"><i class="zmdi zmdi-favorite"></i> Баллы лояльности</span>
+                            <span class="stat-value">{{ loyalty_points }}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label"><i class="zmdi zmdi-memory"></i> Токены AI-бота</span>
+                            <span class="stat-value">2480</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label"><i class="zmdi zmdi-face"></i> Занятий с преподавателем</span>
+                            <span class="stat-value">7</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="student-stats-header educat-primary-header">
+                    Учебный план
+                </div>
+
+                <!-- ДЕРЕВО -->
+                <div class="file-tree" id="fileTree">
+                    {% for course in tree.courses %}
+                    <div class="tree-node {{ course.open_class }}">
+                        <div class="node-header">
+                            <i class="zmdi zmdi-chevron-right toggle-icon"></i>
+                            <i class="zmdi zmdi-folder text-warning mx-2"></i>
+                            <span>{{ course.title }}</span>
+                        </div>
+
+                        <div class="children">
+                            {% for lesson in course.lessons %}
+                            <div class="tree-node {{ lesson.open_class }} {{ lesson.extra_classes }}
+                                        {% if not lesson.is_clickable %}locked{% endif %}">
+
+                                <div class="node-header">
+                                    <i class="zmdi zmdi-chevron-right toggle-icon"></i>
+                                    <i class="{{ lesson.icon_class }} me-1 mx-2"></i>
+                                    <span>{{ lesson.title }}</span>
+                                </div>
+
+                                <div class="children">
+                                    {% for theme in lesson.themes %}
+                                        <div class="tree-node theme-node {{ theme.open_class }} {{ theme.extra_classes }}"
+                                             data-theme="{{ theme.name }}">
+
+                                        <div class="node-header">
+                                            <i class="zmdi zmdi-chevron-right toggle-icon"></i>
+                                            <i class="{{ theme.icon_class }} me-1 mx-2"></i>
+                                            <span>{{ theme.title }}</span>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- RIGHT: Content -->
+            <div class="col-lg-7 col-12">
+                <div class="classroom-main" id="classroomContent">
+                    <div class="exercise-header">
+                        <h3 id="exerciseTitle">Выберите тему из меню слева</h3>
+                        <h4 id="exerciseSecondTitle"></h4>
+                        <p class="mb-0 mt-1" id="exerciseSubtitle">Здесь будет заставка темы или плеер упражнений</p>
+                    </div>
+
+                    <div class="p-4" id="exerciseBody">
+                        <!-- Здесь будет заставка темы или плеер -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-1 col-12 mb-30"></div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block js_scripts %}
+<!-- 1. ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ И КОНСТАНТЫ                  -->
+<script>
+    'use strict';
+
+    window.Classroom = window.Classroom || {};
+
+    // -----------------------------------------------------
+    // Данные и состояние (постепенно переносим под Classroom)
+    // -----------------------------------------------------
+
+    const treeData = {{ tree | tojson }};
+    window.treeData = treeData;
+
+    Classroom.data = {
+        tree: treeData
+    };
+
+    // Текущее упражнение и состояние теста
+    let currentExerciseData = null;
+    let currentTestState = {
+        mistakes: 0,
+        answered: 0,
+        total: 0,
+        themeName: null,
+        showCorrectAnswers: false,
+        results: []
+    };
+
+    // -----------------------------------------------------
+    // Данные текущего пользователя (из скрытого span)
+    // -----------------------------------------------------
+    const userMetaEl = document.querySelector('[data-user-access-level]');
+
+    const currentAccessLevel = userMetaEl
+        ? parseInt(userMetaEl.dataset.userAccessLevel || '0', 10)
+        : 0;
+
+    const currentUserRole = userMetaEl
+        ? (userMetaEl.dataset.userRole || 'student')
+        : 'student';
+
+    function isAdminUser() {
+        return currentUserRole === 'admin';
+    }
+
+    // -----------------------------------------------------
+    // Константы
+    // -----------------------------------------------------
+    function renderVPlayer() {Classroom.debug.log('Мы ошибочно вошли в функцию пустышку renderVPlayer!')}
+    function renderQPlayer() {}
+    function renderTPlayer() {}
+
+    Classroom.constants = {
+        exerciseTypeNames: {
+            "V": "Видео-уроки (V)",
+            "Q": "Интерактивные упражнения (Q)",
+            "T": "Тесты (T)"
+            // "P": "Онлайн урок с преподавателем (P)",
+            // "X": "Упражнение текст (X)",
+            // "E": "Упражнение эссе (E)"
+       },
+        exerciseTypeHandlers: new Map([
+            ["V", renderVPlayer],
+            ["Q", renderQPlayer],
+            ["T", renderTPlayer],
+        ])
+    };
+
+    // -----------------------------------------------------
+    // Отладка
+    // -----------------------------------------------------
+    Classroom.debug = {
+        enabled: true,
+
+        log(...args) {
+            if (this.enabled) {
+                console.log('%c[CLASSROOM]', 'color: #86bc42; font-weight: bold', ...args);
+            }
+        }
+    };
+
+    // Для удобства
+    window.DEBUG_CLASSROOM = Classroom.debug.enabled;
+
+    Classroom.debug.log('isAdminUser()', isAdminUser());
+
+</script>
+
+<!-- 2. ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (Утилиты)                  -->
+<script>
+    'use strict';
+
+    // Создаём контейнер для утилит
+    Classroom.utils = {};
+
+    /**
+     * Поиск темы по имени в дереве
+     */
+    Classroom.utils.findThemeByName = function(themeName) {
+        const tree = Classroom.data.tree || window.treeData;
+        if (!tree || !tree.courses) return null;
+
+        for (const course of tree.courses) {
+            for (const lesson of course.lessons) {
+                for (const theme of lesson.themes) {
+                    if (theme.name === themeName) {
+                        return theme;
+                    }
+                }
+            }
+        }
+        return null;
+    };
+
+    /**
+     * Формирует читаемый заголовок по коду темы
+     */
+    Classroom.utils.getCourseLessonTheme = function(themeName) {
+        const match = themeName.match(/A(\d)(\d{2,3})_H(\d+)/);
+        if (!match) return themeName;
+
+        const course = `A${match[1]}`;
+        const lesson = match[2].padStart(2, '0');
+        const topic  = match[3].padStart(2, '0');
+
+        return `Курс ${course}, Урок ${lesson}, Тема ${topic}:`;
+    };
+
+    /**
+     * Проверяет тарифные ограничения в теме
+     */
+    Classroom.utils.checkTariffRestrictions = function(exerciseCounts, currentAccessLevel) {
+        if (!exerciseCounts || Object.keys(exerciseCounts).length === 0) {
+            return false;
+        }
+
+        return Object.values(exerciseCounts).some(counts => {
+            if (!Array.isArray(counts) || counts.length < 3) return false;
+
+            const maxValue = Math.max(...counts);
+            const currentValue = counts[currentAccessLevel] || 0;
+            return currentValue < maxValue;
+        });
+    };
+
+    /**
+     * Рендер таблицы статистики упражнений (для заставки темы)
+     */
+    Classroom.utils.renderExerciseStatistics = function(exerciseCounts) {
+        if (!exerciseCounts || Object.keys(exerciseCounts).length === 0) {
+            return `<p class="text-muted text-center mt-3">Статистика по упражнениям отсутствует</p>`;
+        }
+
+        const exerciseOrder = ["V", "Q", "T"];
+        let html = `
+            <div class="mt-4">
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered exercise-stats-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" class="align-middle text-center">Тип упражнения</th>
+                                <th colspan="3" class="text-center">Уровни доступа</th>
+                            </tr>
+                            <tr>
+                                <th class="text-center">Базовый</th>
+                                <th class="text-center">Стандарт</th>
+                                <th class="text-center">Премиум</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+
+        for (const type of exerciseOrder) {
+            if (!exerciseCounts[type]) continue;
+
+            const counts = exerciseCounts[type];
+            const name = Classroom.constants.exerciseTypeNames[type] || type;
+            const displayValues = counts.map(v => v > 0 ? v : "—");
+
+            html += `
+                <tr>
+                    <td>${name}</td>
+                    <td class="text-center">${displayValues[0]}</td>
+                    <td class="text-center">${displayValues[1]}</td>
+                    <td class="text-center">${displayValues[2]}</td>
+                </tr>
+            `;
+        }
+
+        html += `</tbody></table></div></div>`;
+        return html;
+    };
+</script>
+
+<!-- 3. ДЕРЕВО УРОКОВ И НАВИГАЦИЯ ПО ТЕМАМ                 -->
+<script>
+    'use strict';
+
+    Classroom.tree = {};
+
+    // Обработка клика по теме в дереве
+    // (вместо того чтобы вешать обработчик на каждый узел, вешаем один обработчик на весь контейнер)
+    Classroom.tree.handleThemeClick = function(themeNode) {
+        const themeName = themeNode.dataset.theme;
+        const themeData = Classroom.utils.findThemeByName(themeName);
+
+        if (!themeData) {
+            console.warn('Тема не найдена в данных дерева:', themeName);
+            return;
+        }
+
+        const exerciseCounts = themeData.exercise_counts || {};
+        const themeTitle     = themeData.title || '';
+        const isAvailable    = themeData.is_available ?? true;
+        const isCompleted    = themeData.is_completed ?? false;
+        const isCurrent      = themeData.is_current ?? false;
+
+        // Закрываем все остальные темы
+        document.querySelectorAll('.theme-node').forEach(node => {
+            if (node !== themeNode) node.classList.remove('open');
+        });
+
+        themeNode.classList.toggle('open');
+
+        // Показываем заставку темы
+        Classroom.lobby.showThemeLobby(
+            themeName,
+            themeTitle,
+            exerciseCounts,
+            isAvailable,
+            isCompleted,
+            isCurrent,
+            currentAccessLevel
+        );
+    };
+
+    // Обработчик кликов по дереву (будет подключён в блоке инициализации)
+    Classroom.tree.initTreeClickHandler = function() {
+        const tree = document.getElementById('fileTree');
+        if (!tree) return;
+
+        tree.addEventListener('click', function(e) {
+            const header = e.target.closest('.node-header');
+            if (!header) return;
+
+            const node = header.parentElement;
+            if (!node.classList.contains('tree-node')) return;
+
+            // 1. Запрещает дальнейшее всплытие события;
+            // 2. запрещает выполнение других обработчиков click (которые также навешаны на этот же элемент)
+            e.stopImmediatePropagation();
+
+            if (node.classList.contains('theme-node')) {
+                Classroom.tree.handleThemeClick(node);
+                return;
+            }
+
+            // Обычные узлы (курс / урок) — просто раскрываем/закрываем
+            node.classList.toggle('open');
+        });
+    };
+</script>
+
+<!-- 4. ЗАСТАВКА ТЕМЫ (Theme Lobby)                        -->
+<script>
+    'use strict';
+
+    Classroom.lobby = {};
+
+    /**
+     * Показывает заставку темы с информацией и кнопкой входа
+     */
+    Classroom.lobby.showThemeLobby = function(
+        themeName,
+        themeTitle = '',
+        exerciseCounts = {},
+        isAvailable = true,
+        isCompleted = false,
+        isCurrent = false,
+        currentAccessLevel = 0
+    ) {
+        const container = document.getElementById('exerciseBody');
+        if (!container) return;
+
+        // Заголовок
+        document.getElementById('exerciseTitle').textContent =
+            Classroom.utils.getCourseLessonTheme(themeName);
+        document.getElementById('exerciseSecondTitle').textContent = themeTitle;
+        document.getElementById('exerciseSubtitle').textContent = `Код темы:: ${themeName}`;
+
+        let messagesHtml = '';
+
+        // Сообщение о статусе темы
+        if (isCompleted) {
+            messagesHtml += `
+                <div class="alert alert-success mt-3">
+                    Эта тема уже была пройдена Вами ранее.
+                </div>
+            `;
+        } else if (!isCurrent && isAvailable) {
+            messagesHtml += `
+                <div class="alert alert-warning mt-3">
+                    Тема пока Вам недоступна: прежде необходимо успешно пройти предыдущие темы.
+                </div>
+            `;
+        }
+
+        // Проверка тарифных ограничений
+        const hasTariffRestrictions = Classroom.utils.checkTariffRestrictions(exerciseCounts, currentAccessLevel);
+
+        if (hasTariffRestrictions) {
+            const langPair = "{{ source_lang }}/{{ ui_lang }}";
+            const coursesUrl = `/${langPair}/courses/`;
+
+            messagesHtml += `
+                <div class="alert alert-danger mt-3">
+                    Тема недоступна (или доступна не полностью) для Вашего тарифного плана.<br>
+                    Вы можете приобрести расширенный доступ на странице
+                    <a href="${coursesUrl}" class="alert-link">Курсы и тарифы</a>.
+                </div>
+            `;
+        }
+
+        const shouldDisableButton = (!isCompleted && !isCurrent) || hasTariffRestrictions;
+
+        const buttonHtml = `
+            <button class="btn button-in-table-green mt-4 btn-auto-fit"
+                    onclick="Classroom.enterTheme('${themeName}')"
+                    ${shouldDisableButton ? 'disabled' : ''}>
+                Войти в тему
+            </button>
+        `;
+
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <h4>Тема содержит следующие упражнения</h4>
+                <p class="text-muted">(в зависимости от уровня доступа)</p>
+
+                ${Classroom.utils.renderExerciseStatistics(exerciseCounts)}
+
+                ${messagesHtml}
+
+                ${buttonHtml}
+            </div>
+        `;
+    };
+</script>
+
+<!-- 5. ЯДРО ПЛЕЕРА УПРАЖНЕНИЙ                             -->
+<script>
+    'use strict';
+
+    Classroom.state = Classroom.state || {};
+    Classroom.state.currentTheme = null;
+
+    // --- Рендер общего контейнера Общего плеера -------------------------------------------------
+    function renderCommonPlayerContainer(themeName) {
+        const container = document.getElementById('exerciseBody');
+        Classroom.debug.log(`Рендерим контейнер в функции renderCommonPlayerContainer; container=${container}`);
+
+        if (!container) return;
+
+        container.innerHTML = `
+            <div id="commonPlayerWrapper" class="common-player-wrapper">
+                <!-- Область содержимого плеера -->
+                <div id="commonPlayerContent" class="common-player-content border rounded p-3 mb-3"
+                     style="min-height: 420px; background: #fff;">
+                    <!-- Здесь рендерятся V / Q / T плееры -->
+                </div>
+
+                <!-- Кнопки навигации -->
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex">
+                        <button class="btn button-in-table-green w-50 mr-5" id="btnPrevBlock">
+                            ← Назад
+                        </button>
+                        <button class="btn button-in-table-green w-50" id="btnNextBlock">
+                            Далее →
+                        </button>
+                    </div>
+
+                    <button class="btn button-in-table-green w-25" id="btnNextNextBlock">
+                        >> Перейти к тестам
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // --- Получение по одному первому упражнению каждого блока типов упражнений -----------------------
+    // Например: ["BGRUA1002_V001", "BGRUA1002_Q001", "BGRUA1002_T001"]
+    async function fetchThemeBlockStarters(themeName) {
+        try {
+            const res = await fetch(`/api/theme/${themeName}/exercises`);
+            if (!res.ok) throw new Error('Ошибка загрузки блоков темы');
+            return await res.json(); // ["BGRUA1002_V001", "BGRUA1002_Q001", "BGRUA1002_T001"]
+        } catch (err) {
+            console.error(err);
+            return [];
+        }
+    }
+
+    // --- commonPlayer - это плеер всех плееров ---------------------------------------------
+    async function commonPlayer(themeName) {
+        Classroom.debug.log('Запуск commonPlayer для темы:', themeName);
+
+        const blockStarters = await fetchThemeBlockStarters(themeName);
+        Classroom.debug.log('Первые упражнения каждой группы:', blockStarters);
+
+        if (!blockStarters || blockStarters.length === 0) {
+            const container = document.getElementById('exerciseBody');
+            if (container) {
+                Classroom.debug.log("В этой теме пока нет доступных упражнений.");
+            }
+            return;
+        }
+
+        // Сохраняем состояние
+        Classroom.state.currentTheme = {
+            name: themeName,
+            blocks: blockStarters,
+            currentIndex: 0
+        };
+        renderCommonPlayerContainer(themeName);   // рендерим контейнер плеера упражнений
+        await playCurrentBlock();                 // запускаем Общий плеер (как бы начинаем цикл обхода блоков типов упражнений)
+    }
+
+    // --- Запуск текущей группы упражнений ----------------------------------------------
+    async function playCurrentBlock() {
+        const state = Classroom.state.currentTheme;
+        if (!state || state.currentIndex >= state.blocks.length) {
+            // Тема полностью пройдена
+            const container = document.getElementById('exerciseBody');
+            if (container) {
+                container.innerHTML = `
+                    <div class="alert alert-success text-center py-5">
+                        <h5>Тема завершена</h5>
+                        <p>Поздравляем! Вы прошли все доступные блоки темы.</p>
+                    </div>
+                `;
+            }
+            Classroom.debug.log('Тема завершена');
+            return;
+        }
+
+        const exerciseName = state.blocks[state.currentIndex];
+        Classroom.debug.log(`Запуск блока ${state.currentIndex + 1}/${state.blocks.length}:`, exerciseName);
+
+        await loadExercise(exerciseName);
+    }
+
+    // --- Завершение текущего блока и переход к следующему -----------------------------------------
+    // ------ переход к следующему блоку типов упражнений внутри Общего плеера
+    // ------ и завершение общего плеера, если ходить больше некуда
+    function completeCurrentBlock() {
+        const state = Classroom.state.currentTheme;
+        if (!state) return;
+
+        state.currentIndex++;
+        playCurrentBlock();
+    }
+    // ================================================================
+    //  ОБЩИЕ ФУНКЦИИ (для всех типов плееров)
+    // ================================================================
+    /**
+     * Главный диспетчер. Вызывает нужный плеер в зависимости от типа упражнения.
+     */
+    function renderExercise(data) {
+        currentExerciseData = data;
+
+        // === Обновляем шапку страницы ===
+        const headerTitle = document.getElementById('exerciseTitle');
+        const headerSecond = document.getElementById('exerciseSecondTitle') || document.getElementById('exerciseThemeTitle');
+        const headerSubtitle = document.getElementById('exerciseSubtitle');
+
+        if (headerTitle) {
+            // "Курс A1, Урок 02, Тема 01:"
+            headerTitle.textContent = data.exercise_full_name || data.title || 'Упражнение';
+        }
+
+        if (headerSecond) {
+            // Название темы
+            headerSecond.textContent = data.theme_title || '';
+        }
+
+        if (headerSubtitle) {
+            // Код темы или имя упражнения
+            if (data.themeName) {
+                headerSubtitle.textContent = `Код темы:: ${data.themeName}`;
+            } else {
+                headerSubtitle.textContent = data.name || '';
+            }
+        }
+
+        const handler = Classroom.constants.exerciseTypeHandlers.get(data.type);
+
+        const container =
+            document.getElementById('commonPlayerContent') ||
+            document.getElementById('exerciseBody');
+
+        if (!container) return;
+
+        if (handler) {
+            handler(data, container);
+        } else {
+            console.log(`Нет плеера для типа упражнения: ${data.type}`);
+        }
+    }
+
+    /**
+     * Делает запрос к БД и передаёт данные для рендеринга в renderExercise(data)
+     */
+    async function loadExercise(exerciseName, showCorrect = false) {
+        Classroom.debug.log("Вошли в функцию loadExercise");
+        const container = document.getElementById('commonPlayerContent') || document.getElementById('exerciseBody');
+
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="text-center py-5">
+                <div class="spinner-border text-success"></div>
+                <p class="mt-3">Загрузка...</p>
+            </div>
+        `;
+
+        try {
+            const url = `/api/exercise/${exerciseName}${showCorrect ? '?show_correct=1' : ''}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if (data.error) {
+                container.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+
+            // Вызываем диспетчер, который запустит нужный плеер (renderVPlayer и т.д.)
+            Classroom.debug.log(`Вызываем функцию renderExercise(data) c data=${data}`);
+            renderExercise(data);
+
+        } catch (err) {
+            console.error(err);
+            container.innerHTML = `<div class="alert alert-danger">Ошибка загрузки упражнения</div>`;
+        }
+    }
+
+    // =====================================================
+    // Сохранение текущего упражнения пользователя
+    // =====================================================
+    async function saveCurrentExercise(exerciseName) {
+    if (!exerciseName) return;
+    try {
+        await fetch('/api/user/current-exercise', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ exercise_name: exerciseName })
+        });
+        Classroom.debug.log('current_exercise сохранён:', exerciseName);
+    } catch (err) {
+        console.error('Не удалось сохранить current_exercise:', err);
+    }
+}
+    // ================================================================
+    // УПРАВЛЕНИЕ КНОПКАМИ НАВИГАЦИИ (централизованно)
+    // ================================================================
+
+    /**
+     * Обновляет состояние и поведение кнопок навигации
+     * в зависимости от текущего типа блока
+     */
+    function updateNavigationButtons(blockType) {
+        const btnPrev   = document.getElementById('btnPrevBlock');
+        const btnNext   = document.getElementById('btnNextBlock');
+        const btnToTest = document.getElementById('btnNextNextBlock');
+
+        if (!btnPrev || !btnNext || !btnToTest) return;
+
+        // Сбрасываем обработчики
+        btnPrev.onclick = null;
+        btnNext.onclick = null;
+        btnToTest.onclick = null;
+
+        // Убираем disabled у всех
+        btnPrev.disabled = false;
+        btnNext.disabled = false;
+        btnToTest.disabled = false;
+
+        switch (blockType) {
+            case 'V':
+                // Видео: Назад — неактивна, Далее — на Q, >> на T
+                btnPrev.disabled = true;
+                btnNext.onclick = () => completeCurrentBlock();
+                btnToTest.onclick = () => goToFirstTestBlock();
+                break;
+
+            case 'Q':
+                // Q: Назад — на предыдущее Q или на V
+                btnPrev.onclick = () => goToPreviousQExercise();
+                btnNext.onclick = () => goToNextQExercise();
+                btnToTest.onclick = () => goToFirstTestBlock();
+                break;
+
+            case 'T':
+                // Тест: все кнопки неактивны
+                btnPrev.disabled = true;
+                btnNext.disabled = true;
+                btnToTest.disabled = true;
+                break;
+
+            default:
+                btnPrev.disabled = true;
+                btnNext.disabled = true;
+                btnToTest.disabled = true;
+        }
+    }
+
+    // ================================================================
+    // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ НАВИГАЦИИ
+    // ================================================================
+
+    function goToFirstTestBlock() {
+        const state = Classroom.state.currentTheme;
+        if (!state?.blocks) return;
+
+        const testIndex = state.blocks.findIndex(name => name.includes('_T'));
+        if (testIndex !== -1) {
+            state.currentIndex = testIndex;
+            playCurrentBlock();
+        }
+    }
+
+    function goToPreviousQExercise() {
+        if (!currentExerciseData?.themeQExercises) return;
+
+        const prevIndex = currentExerciseData.currentQIndex - 1;
+
+        if (prevIndex >= 0) {
+            const prevEx = currentExerciseData.themeQExercises[prevIndex];
+            loadExercise(prevEx.name);
+        } else {
+            // Первое Q → назад к видео (блок V)
+            const state = Classroom.state.currentTheme;
+            if (!state) return;
+
+            const vIndex = state.blocks.findIndex(name => name.includes('_V'));
+            if (vIndex !== -1) {
+                state.currentIndex = vIndex;
+                playCurrentBlock();
+            }
+        }
+    }
+
+    function goToNextQExercise() {
+        if (!currentExerciseData?.themeQExercises) {
+            completeCurrentBlock();
+            return;
+        }
+
+        const nextIndex = currentExerciseData.currentQIndex + 1;
+
+        if (nextIndex < currentExerciseData.themeQExercises.length) {
+            const nextEx = currentExerciseData.themeQExercises[nextIndex];
+            loadExercise(nextEx.name);
+        } else {
+            // Q закончились → блок T
+            completeCurrentBlock();
+        }
+    }
+
+    // Временные заглушки (потом заменим на нормальные)
+    function renderQuestionWithMultipleSlots(question, variants, container) {
+        const qCont = container.querySelector('#questionContainer');
+        if (qCont) qCont.innerHTML = `<div class="text-muted">Вопрос: ${question}</div>`;
+    }
+
+    // Функция подсветки активного слота
+    function highlightActiveSlot() {
+        document.querySelectorAll('.answer-slot').forEach(s => {
+            s.classList.remove('active-slot');
+        });
+        const slots = document.querySelectorAll('.answer-slot:not(.filled)');
+        if (slots[0]) slots[0].classList.add('active-slot');
+    }
+
+</script>
+
+<!-- 6. ПЛЕЕР V и Q                                      -->
+<script>
+    'use strict';
+
+    // ================================================================
+    // ПЛЕЕР ВИДЕО (V)
+    // ================================================================
+
+    function renderVPlayer(data, container) {
+        Classroom.debug.log(`Вошли в функцию renderVPlayer(data, container) data.youtube_video=${data.youtube_video}; container=${container}` );
+        if (!container) return;
+
+        let videoHtml = '';
+
+        if (data.youtube_video) {
+            const videoSrc = `https://www.youtube.com/embed/${data.youtube_video}`;
+            videoHtml = `
+                <div class="embed-responsive embed-responsive-16by9 mb-4" style="max-width: 900px; margin: 0 auto;">
+                    <iframe
+                        class="embed-responsive-item"
+                        src="${videoSrc}"
+                        title="${data.title || 'Видео-урок'}"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen>
+                    </iframe>
+                </div>
+            `;
+        } else {
+            videoHtml = `
+                <div class="alert alert-warning text-center py-4">
+                    Видео не указано для этого упражнения.
+                </div>
+            `;
+        }
+
+        container.innerHTML = `
+            <div class="text-center">
+                ${videoHtml}
+
+                ${data.theory ? `
+                    <div class="card mt-3 mx-auto" style="max-width: 900px; text-align: left;">
+                        <div class="card-header bg-light">
+                            <strong>Теория</strong>
+                        </div>
+                        <div class="card-body">
+                            ${data.theory}
+                        </div>
+                    </div>
+                ` : ''}
+
+            </div>
+        `;
+
+        Classroom.debug.log("container.innerHTML", container.innerHTML);
+        Classroom.debug.log("container.querySelector('iframe')", container.querySelector('iframe'));
+        setTimeout(() => {
+            Classroom.debug.log('iframe after 500ms =', container.querySelector('iframe'));
+        }, 500);
+
+        // Привязываем кнопки + обновляем их состояние
+        updateNavigationButtons('V');
+
+        const btnContinue = document.getElementById('btnContinueVideo');
+        if (btnContinue) btnContinue.onclick = () => completeCurrentBlock();
+    }
+    Classroom.constants.exerciseTypeHandlers.set("V", renderVPlayer);   // Обновляем ссылку на эту функцию в Map:
+
+    /**
+     * Привязка кнопок навигации для видео-блока
+     */
+    function bindVideoBlockNavigation() {
+        const btnPrev   = document.getElementById('btnPrevBlock');
+        const btnNext   = document.getElementById('btnNextBlock');
+        const btnToTest = document.getElementById('btnNextNextBlock');
+        const btnContinue = document.getElementById('btnContinueVideo');
+
+        // Кнопка "Продолжить" внутри видео
+        if (btnContinue) {
+            btnContinue.onclick = () => completeCurrentBlock();
+        }
+
+        // Кнопка "Далее" в общем контейнере
+        if (btnNext) {
+            btnNext.onclick = () => completeCurrentBlock();
+        }
+
+        // Кнопка ">> Перейти к тестам"
+        if (btnToTest) {
+            btnToTest.onclick = () => goToFirstTestFromVideo();
+        }
+
+        // Кнопка "Назад"
+        if (btnPrev) {
+            btnPrev.onclick = () => {
+                Classroom.debug.log('Назад из видео (пока не реализовано)');
+            };
+        }
+    }
+
+    /**
+     * Переход к первому тесту темы напрямую из видео
+     */
+    function goToFirstTestFromVideo() {
+        const state = Classroom.state.currentTheme;
+        if (!state || !state.blocks) return;
+
+        // Ищем первый блок, который является тестом
+        const testIndex = state.blocks.findIndex(name => name.includes('_T'));
+
+        if (testIndex !== -1) {
+            state.currentIndex = testIndex;
+            playCurrentBlock();
+        } else {
+            Classroom.debug.log('Тестовый блок в этой теме не найден');
+        }
+    }
+
+
+    // --- ПЛЕЕР ИНТЕРАКТИВНЫХ УПРАЖНЕНИЙ (Q) ---------------------------------------------------------------------------
+
+    function renderQPlayer(data, container) {
+        if (!container) return;
+
+        currentExerciseData = data;
+
+        container.innerHTML = `
+            <div>
+                <h5 class="mb-3">${data.title || 'Упражнение Q'}</h5>
+                <div id="questionContainer" class="question-container mb-4 p-3 border rounded fs-4"></div>
+                <div class="mb-2"><strong>Варианты ответов:</strong></div>
+                <div id="variantsContainer" class="variants-container d-flex flex-wrap gap-2 mb-3"></div>
+            </div>
+        `;
+
+        // === Шкала прогресса  ==========================================
+        if (data.themeQExercises && data.currentQIndex !== undefined) {
+            renderQProgress(data, container);
+        }
+
+        // === Вопрос со слотами ===
+        const questionContainer = container.querySelector('#questionContainer');
+        if (questionContainer && data.question) {
+            renderQuestionWithMultipleSlots(data.question, questionContainer);
+        }
+
+        // === Варианты ===
+        const variantsContainer = container.querySelector('#variantsContainer');
+        if (variantsContainer && data.variants) {
+            renderAllVariants(data.variants, variantsContainer);
+        }
+
+        updateNavigationButtons('Q');
+    }
+
+    Classroom.constants.exerciseTypeHandlers.set("Q", renderQPlayer);   // Обновляем ссылку на эту функцию в Map:
+
+    // === Прогресс по Q-упражнениям темы ======================================
+    function renderQProgress(data, container) {
+        // Удаляем старую шкалу, если она уже есть
+        const oldProgress = container.querySelector('#qProgress');
+        if (oldProgress) oldProgress.remove();
+
+        if (!data.themeQExercises || data.themeQExercises.length === 0) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.id = 'qProgress';
+        wrapper.className = 'mb-3';
+
+        const header = document.createElement('div');
+        header.className = 'small text-muted mb-1';
+        header.textContent = 'Прогресс по теме:';
+        wrapper.appendChild(header);
+
+        const track = document.createElement('div');
+        track.className = 'd-flex align-items-center position-relative';
+        track.style.gap = '0';
+
+        data.themeQExercises.forEach((ex, index) => {
+            const isCompleted = index <= data.currentQIndex;
+            const canClick = isAdminUser();
+
+            const dot = document.createElement('div');
+            dot.style.cssText = `
+                width: 26px;
+                height: 26px;
+                font-size: 0.75rem;
+                z-index: 2;
+                cursor: ${canClick ? 'pointer' : 'default'};
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+                border: 2px solid ${isCompleted ? '#86bc42' : '#6c757d'};
+                background-color: ${isCompleted ? '#86bc42' : '#fff'};
+                color: ${isCompleted ? '#fff' : '#495057'};
+                font-weight: ${index === data.currentQIndex ? '700' : '500'};
+                box-shadow: ${index === data.currentQIndex ? '0 0 0 4px rgba(134, 188, 66, 0.3)' : 'none'};
+                transition: all 0.2s ease;
+            `;
+            dot.textContent = index + 1;
+            dot.title = ex.title || ex.name;
+
+            // Клик только для admin
+            if (canClick) {
+                dot.addEventListener('click', () => {
+                    if (index !== data.currentQIndex) {
+                        loadExercise(ex.name);
+                    }
+                });
+            }
+
+            track.appendChild(dot);
+
+            // Линия между точками
+            if (index < data.themeQExercises.length - 1) {
+                const line = document.createElement('div');
+                line.style.cssText = `
+                    flex: 1;
+                    height: 3px;
+                    background: ${index < data.currentQIndex ? '#86bc42' : '#dee2e6'};
+                    margin: 0 -1px;
+                    z-index: 1;
+                `;
+                track.appendChild(line);
+            }
+        });
+
+        wrapper.appendChild(track);
+        container.prepend(wrapper);   // вставляем в начало контейнера
+    }
+
+
+    // =====================================================
+    // Логика ответов для Q
+    // =====================================================
+
+    function handleQAnswer(slot, value) {
+        const slotIndex = parseInt(slot.dataset.slotIndex);
+
+        const validValues = new Set();
+        if (currentExerciseData?.correctCombinations) {
+            currentExerciseData.correctCombinations.forEach(combo => {
+                if (Array.isArray(combo) && slotIndex < combo.length) {
+                    validValues.add(combo[slotIndex]);   // без проверки на truthy
+                }
+            });
+        }
+
+        Classroom.debug.log('slotIndex:', slotIndex);
+        Classroom.debug.log('value:', JSON.stringify(value));
+        Classroom.debug.log('validValues:', [...validValues]);
+        Classroom.debug.log('currentExerciseData:', currentExerciseData);
+
+        if (!validValues.has(value)) {
+            slot.classList.add('shake', 'wrong-answer');
+            setTimeout(() => slot.classList.remove('shake', 'wrong-answer'), 600);
+            return;
+        }
+
+        slot.innerHTML = `<strong>${value}</strong>`;
+        slot.classList.add('filled');
+
+        refreshVariantsForCurrentSlot();
+        highlightActiveSlot();
+
+        const allSlots = document.querySelectorAll('.answer-slot');
+        const allFilled = Array.from(allSlots).every(s => s.classList.contains('filled'));
+
+        if (allFilled) {
+            Classroom.debug.log('Все слоты заполнены — можно проверять');
+            validateFullAnswer();
+        }
+    }
+
+
+    // === Полная проверка ответа (когда все слоты заполнены) ===
+    function validateFullAnswer() {
+        if (!currentExerciseData) return;
+
+        const slots = document.querySelectorAll('.answer-slot');
+        const current = Array.from(slots).map(s => s.textContent.trim());
+        const combinations = currentExerciseData.correctCombinations || [];
+
+        const isValid = combinations.some(combo =>
+            combo.length === current.length &&
+            combo.every((val, i) => val === current[i])
+        );
+
+        if (isValid) {
+            // Подсвечиваем все слоты зелёным
+            slots.forEach(s => {
+                s.classList.add('filled');
+                if (!s.innerHTML.includes('text-success')) {
+                    s.innerHTML = `<strong class="text-success">${s.textContent.trim()}</strong>`;
+                }
+            });
+
+            // Сообщение об успехе
+            let status = document.getElementById('exerciseStatus');
+            if (!status) {
+                status = document.createElement('div');
+                status.id = 'exerciseStatus';
+                const container = document.getElementById('commonPlayerContent') || document.getElementById('exerciseBody');
+                if (container) container.appendChild(status);
+            }
+
+            status.innerHTML = `
+                <div class="alert alert-success mt-3 py-2">
+                    <strong>Отлично!</strong> Упражнение выполнено правильно.
+                </div>
+            `;
+
+            // Автоматический переход через 2.5 секунды
+            autoAdvanceToNextQ();
+        }
+    }
+
+
+    // === Переход к следующему Q-упражнению ===
+    function autoAdvanceToNextQ() {
+        if (!currentExerciseData || !currentExerciseData.themeQExercises) return;
+
+        const nextIndex = currentExerciseData.currentQIndex + 1;
+
+        if (nextIndex < currentExerciseData.themeQExercises.length) {
+            const nextExercise = currentExerciseData.themeQExercises[nextIndex];
+            Classroom.debug.log('Таймер запущен', new Date().toISOString());
+            setTimeout(() => {
+                Classroom.debug.log('Таймер сработал', new Date().toISOString());
+                loadExercise(nextExercise.name);
+            }, 3000);
+        } else {
+            // Все Q-упражнения темы пройдены → переходим к следующему блоку (T)
+            Classroom.debug.log('Q-блок закончен → вызываем completeCurrentBlock()');
+            setTimeout(() => {
+                completeCurrentBlock();
+            }, 2500);
+        }
+    }
+
+</script>
+
+
+<!-- 7. ОБЩИЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (для Q и T)          -->
+<script>
+    // =====================================================
+    // ОБЩИЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (для Q и T)
+    // =====================================================
+
+    // === Вопрос со слотами ===
+    function renderQuestionWithMultipleSlots(questionText, questionContainer) {
+        if (!questionContainer) return;
+        questionContainer.innerHTML = '';
+
+        if (!questionText) {
+            questionContainer.innerHTML = `<p class="text-muted">Нет текста вопроса.</p>`;
+            return;
+        }
+
+        let slotIndex = 0;
+        const html = questionText.replace(/\[\]/g, () => {
+            return `<span class="answer-slot" data-slot-index="${slotIndex++}"></span>`;
+        });
+        questionContainer.innerHTML = html;
+
+        // Делаем слоты droppable
+        const slots = questionContainer.querySelectorAll('.answer-slot');
+        slots.forEach(slot => makeSlotDroppable(slot));
+
+        highlightActiveSlot();
+    }
+
+    // === Варианты (с drag и двойным кликом) ===
+    function renderAllVariants(variantsGroups, variantsContainer, activeSlotIndex = null) {
+        if (!variantsContainer) return;
+        variantsContainer.innerHTML = '';
+
+        if (!Array.isArray(variantsGroups) || variantsGroups.length === 0) {
+            variantsContainer.innerHTML = `<div class="text-muted">Нет вариантов</div>`;
+            return;
+        }
+
+        // Если индекс не передан — берём первый пустой слот
+        if (activeSlotIndex === null || activeSlotIndex === undefined) {
+            activeSlotIndex = getActiveSlotIndex();
+        }
+
+        const group = variantsGroups[activeSlotIndex];
+        if (!Array.isArray(group) || group.length === 0) {
+            variantsContainer.innerHTML = `<div class="text-muted">Нет вариантов для этого слота</div>`;
+            return;
+        }
+
+        const row = document.createElement('div');
+        row.className = 'd-flex flex-wrap gap-2 mb-2 align-items-center';
+
+        const label = document.createElement('span');
+        label.className = 'small text-muted me-2';
+        label.textContent = `Слот ${activeSlotIndex + 1}:`;
+        row.appendChild(label);
+
+        group.forEach(value => {
+            if (value === null || value === undefined) return;
+            const text = String(value).trim();
+            if (text === '' && value !== ' ') return;
+
+            const box = document.createElement('div');
+            box.className = 'variant-box';
+            box.textContent = value === ' ' ? '␣' : value;
+            box.dataset.value = value;
+            box.draggable = true;
+
+            box.addEventListener('dragstart', e => {
+                e.dataTransfer.setData('text/plain', value);
+                box.classList.add('dragging');
+            });
+            box.addEventListener('dragend', () => box.classList.remove('dragging'));
+            box.addEventListener('click', () => moveVariantWithAnimation(box, variantsContainer));
+
+            row.appendChild(box);
+        });
+
+        variantsContainer.appendChild(row);
+    }
+
+    // Индекс первого незаполненного слота
+    function getActiveSlotIndex() {
+        const slots = document.querySelectorAll('.answer-slot');
+        for (let i = 0; i < slots.length; i++) {
+            if (!slots[i].classList.contains('filled')) {
+                return parseInt(slots[i].dataset.slotIndex, 10);
+            }
+        }
+        return 0;
+    }
+
+    // Обновить варианты под текущий слот
+    function refreshVariantsForCurrentSlot() {
+        if (!currentExerciseData?.variants) return;
+
+        const variantsContainer = document.getElementById('variantsContainer');
+        if (!variantsContainer) return;
+
+        const activeIndex = getActiveSlotIndex();
+        const allFilled = document.querySelectorAll('.answer-slot:not(.filled)').length === 0;
+
+        if (allFilled) {
+            variantsContainer.innerHTML = '';
+            return;
+        }
+
+        renderAllVariants(currentExerciseData.variants, variantsContainer, activeIndex);
+    }
+
+    // === Делаем слот droppable ===
+    function makeSlotDroppable(slot) {
+        slot.addEventListener('dragover', e => {
+            e.preventDefault();
+            slot.style.background = '#e3f2fd';
+        });
+        slot.addEventListener('dragleave', () => slot.style.background = '');
+        slot.addEventListener('drop', e => {
+            e.preventDefault();
+            slot.style.background = '';
+            const value = e.dataTransfer.getData('text/plain');
+            handleAnswer(slot, value);
+        });
+    }
+
+    // === Перемещение варианта с анимацией (по двойному клику) ===
+    function moveVariantWithAnimation(variantBox, variantsContainer) {
+        const firstEmptySlot = document.querySelector('.answer-slot:not(.filled)');
+        if (!firstEmptySlot) return;
+
+        const rect = firstEmptySlot.getBoundingClientRect();
+        const startRect = variantBox.getBoundingClientRect();
+
+        const clone = variantBox.cloneNode(true);
+        clone.style.position = 'fixed';
+        clone.style.left = startRect.left + 'px';
+        clone.style.top = startRect.top + 'px';
+        clone.style.width = startRect.width + 'px';
+        clone.style.zIndex = '9999';
+        document.body.appendChild(clone);
+
+        variantBox.style.visibility = 'hidden';
+
+        clone.animate([
+            { transform: 'translate(0, 0)' },
+            { transform: `translate(${rect.left - startRect.left}px, ${rect.top - startRect.top}px)` }
+        ], { duration: 600, easing: 'ease-in-out' }).onfinish = () => {
+            clone.remove();
+            handleAnswer(firstEmptySlot, variantBox.dataset.value);
+            variantBox.style.visibility = 'visible';
+        };
+    }
+
+    // === Общий диспетчер ответов ===
+    function handleAnswer(slot, value) {
+        if (!currentExerciseData) return;
+
+        if (currentExerciseData.type === 'T') {
+            handleTAnswer(slot, value);
+        } else {
+            handleQAnswer(slot, value);
+        }
+    }
+
+</script>
+
+
+<!-- ===================================================== -->
+<!-- 8. ПЛЕЕР ТИПА T (Тесты)                               -->
+<!-- ===================================================== -->
+<script>
+    // --- ПЛЕЕР ТЕСТОВ (T) ---------------------------------------------------------------------------
+    function renderTPlayer(data, container) {
+        if (!container) return;
+
+        currentExerciseData = data;
+
+        // Инициализация состояния теста
+        initTestState(data);
+
+        container.innerHTML = `
+            <div>
+                <h5 class="mb-3">${data.title || 'Тест'}</h5>
+                <div id="questionContainer" class="question-container mb-4 p-3 border rounded fs-4"></div>
+                <div class="mb-2"><strong>Варианты ответов:</strong></div>
+                <div id="variantsContainer" class="variants-container mb-3"></div>
+                <div id="exerciseStatus"></div>
+            </div>
+        `;
+
+        // === Шкала прогресса теста ===
+        if (data.themeTExercises) {
+            renderTProgress(data, container);
+        }
+
+        // === Вопрос со слотами ===
+        const questionContainer = container.querySelector('#questionContainer');
+        if (questionContainer && data.question) {
+            renderQuestionWithMultipleSlots(data.question, questionContainer);
+        }
+
+        // === Варианты ===
+        const variantsContainer = container.querySelector('#variantsContainer');
+        if (variantsContainer && data.variants) {
+            renderAllVariants(data.variants, variantsContainer);
+        }
+
+        updateNavigationButtons('T');
+    }
+
+    Classroom.constants.exerciseTypeHandlers.set("T", renderTPlayer);
+
+
+    // === Инициализация состояния теста ===
+    function initTestState(data) {
+        if (!window.currentTestState) {
+            window.currentTestState = {
+                mistakes: 0,
+                answered: 0,
+                total: 0,
+                themeName: null,
+                showCorrectAnswers: true,  // показ правильного варианта!
+                results: []
+            };
+        }
+
+        // Сбрасываем состояние при старте нового теста или смене темы
+        if (data.currentTIndex === 0 || currentTestState.themeName !== data.themeName) {
+            currentTestState = {
+                mistakes: 0,
+                answered: 0,
+                total: data.themeTExercises ? data.themeTExercises.length : 0,
+                themeName: data.themeName,
+                showCorrectAnswers: data.showCorrectAnswers || true,
+                results: []
+            };
+        }
+    }
+
+
+    // === Прогресс теста T ===
+    function renderTProgress(data, container) {
+        // Удаляем старую шкалу, если она уже есть
+        const oldProgress = container.querySelector('#tProgress');
+        if (oldProgress) oldProgress.remove();
+
+        if (!data.themeTExercises || data.themeTExercises.length === 0) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.id = 'tProgress';
+        wrapper.className = 'mb-3';
+
+        const header = document.createElement('div');
+        header.className = 'small text-muted mb-1';
+        header.textContent = 'Прогресс теста:';
+        wrapper.appendChild(header);
+
+        const track = document.createElement('div');
+        track.className = 'd-flex align-items-center position-relative';
+        track.style.gap = '0';
+
+        data.themeTExercises.forEach((ex, index) => {
+            const result = currentTestState.results.find(r => r.index === index);
+            const isCurrent = index === data.currentTIndex;
+            const canClick = isAdminUser();
+
+            let borderColor = '#6c757d';
+            let bgColor = '#fff';
+            let textColor = '#495057';
+            let boxShadow = 'none';
+            let fontWeight = '500';
+
+            if (result) {
+                if (result.hadMistake) {
+                    // Ошибка — красный
+                    borderColor = '#dc3545';
+                    bgColor = '#f8d7da';
+                    textColor = '#721c24';
+                } else {
+                    // Правильно — зелёный
+                    borderColor = '#86bc42';
+                    bgColor = '#86bc42';
+                    textColor = '#fff';
+                }
+            } else if (isCurrent) {
+                // Текущий вопрос
+                borderColor = '#0d6efd';
+                bgColor = '#fff';
+                boxShadow = '0 0 0 4px rgba(13, 110, 253, 0.3)';
+                fontWeight = '700';
+            }
+
+            const dot = document.createElement('div');
+            dot.style.cssText = `
+                width: 26px;
+                height: 26px;
+                font-size: 0.75rem;
+                z-index: 2;
+                cursor: ${canClick ? 'pointer' : 'default'};
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+                border: 2px solid ${borderColor};
+                background-color: ${bgColor};
+                color: ${textColor};
+                font-weight: ${fontWeight};
+                box-shadow: ${boxShadow};
+                transition: all 0.2s ease;
+            `;
+            dot.textContent = index + 1;
+            dot.title = ex.title || ex.name;
+
+            if (canClick) {
+                dot.addEventListener('click', () => {
+                    if (index !== data.currentTIndex) {
+                        loadExercise(ex.name, currentTestState.showCorrectAnswers);
+                    }
+                });
+            }
+
+            track.appendChild(dot);
+
+            // Линия между точками
+            if (index < data.themeTExercises.length - 1) {
+                const line = document.createElement('div');
+                let lineColor = '#dee2e6';
+
+                const thisResult = currentTestState.results.find(r => r.index === index);
+                if (thisResult && !thisResult.hadMistake) {
+                    lineColor = '#86bc42';
+                } else if (thisResult && thisResult.hadMistake) {
+                    lineColor = '#dc3545';
+                }
+
+                line.style.cssText = `
+                    flex: 1;
+                    height: 3px;
+                    background: ${lineColor};
+                    margin: 0 -1px;
+                    z-index: 1;
+                `;
+                track.appendChild(line);
+            }
+        });
+
+        wrapper.appendChild(track);
+        container.prepend(wrapper);
+    }
+
+
+    // =====================================================
+    // Логика ответов для T
+    // =====================================================
+    function handleTAnswer(slot, value) {
+        const slotIndex = parseInt(slot.dataset.slotIndex, 10);
+
+        // Сразу вставляем значение в слот
+        slot.innerHTML = `<strong>${value}</strong>`;
+        slot.classList.add('filled');
+
+        // Допустимые значения для этого слота
+        const validValues = new Set();
+        (currentExerciseData.correctCombinations || []).forEach(combo => {
+            if (Array.isArray(combo) && slotIndex < combo.length) {
+                validValues.add(combo[slotIndex]);
+            }
+        });
+
+        Classroom.debug.log('T slotIndex:', slotIndex);
+        Classroom.debug.log('T value:', JSON.stringify(value));
+        Classroom.debug.log('T validValues:', [...validValues]);
+
+        const isWrong = !validValues.has(value);
+        const container = document.getElementById('commonPlayerContent')
+            || document.getElementById('exerciseBody');
+
+        // ==================== ОШИБКА ====================
+        if (isWrong) {
+            currentTestState.mistakes++;
+            currentTestState.results.push({
+                index: currentExerciseData.currentTIndex,
+                hadMistake: true
+            });
+
+            slot.classList.add('wrong-answer');
+            renderTProgress(currentExerciseData, container);
+
+            // 1) Показать правильный ответ через 0.7 с
+            if (currentTestState.showCorrectAnswers && currentExerciseData.correctCombinations?.length > 0) {
+                const correctCombo = currentExerciseData.correctCombinations[0];
+                setTimeout(() => {
+                    document.querySelectorAll('.answer-slot').forEach((s, idx) => {
+                        if (!s.classList.contains('filled') || s.classList.contains('wrong-answer')) {
+                            s.innerHTML = `<strong class="text-danger">${correctCombo[idx] || ''}</strong>`;
+                            s.title = 'Правильный ответ';
+                        }
+                    });
+                }, 700);
+            }
+
+            // 2) Переход дальше после того, как ответ успели увидеть
+            const delayBeforeNext = 2800;
+
+            if (currentTestState.mistakes >= 3) {
+                setTimeout(() => finishTest(), delayBeforeNext);
+                return;
+            }
+
+            setTimeout(() => proceedToNextTOrFinish(), delayBeforeNext);
+            return;
+        }
+
+        // ==================== ПРАВИЛЬНЫЙ ВАРИАНТ ====================
+        // Обновляем варианты под следующий слот
+        if (typeof refreshVariantsForCurrentSlot === 'function') {
+            refreshVariantsForCurrentSlot();
+            highlightActiveSlot();
+        }
+
+        const allSlots = document.querySelectorAll('.answer-slot');
+        const allFilled = Array.from(allSlots).every(s => s.classList.contains('filled'));
+
+        if (allFilled) {
+            currentTestState.results.push({
+                index: currentExerciseData.currentTIndex,
+                hadMistake: false
+            });
+
+            renderTProgress(currentExerciseData, container);
+
+            Classroom.debug.log('T успех: таймер запущен', new Date().toISOString());
+            setTimeout(() => {
+                Classroom.debug.log('T успех: таймер сработал', new Date().toISOString());
+                proceedToNextTOrFinish();
+            }, 1200);
+        }
+    }
+
+    // === Переход к следующему вопросу теста или завершение ===
+    function proceedToNextTOrFinish() {
+        const data = currentExerciseData;
+        if (!data || data.type !== 'T') return;
+
+        // Если уже 3 ошибки — не идём дальше
+        if (currentTestState.mistakes >= 3) {
+            finishTest();
+            return;
+        }
+
+        const nextIndex = data.currentTIndex + 1;
+
+        if (data.themeTExercises && nextIndex < data.themeTExercises.length) {
+            const nextEx = data.themeTExercises[nextIndex];
+            loadExercise(nextEx.name, currentTestState.showCorrectAnswers, true);
+        } else {
+            finishTest();
+        }
+    }
+
+
+    // === Завершение теста ===
+    function finishTest() {
+        const container = document.getElementById('commonPlayerContent') || document.getElementById('exerciseBody');
+        if (!container || !currentExerciseData) return;
+
+        const mistakes = currentTestState.mistakes;
+        const allowed = currentExerciseData.mistakesAllowed || 3;
+
+        let status = document.getElementById('exerciseStatus');
+        if (!status) {
+            status = document.createElement('div');
+            status.id = 'exerciseStatus';
+            container.appendChild(status);
+        }
+
+        if (mistakes < allowed) {
+            // Сохраняем СРАЗУ, пока currentExerciseData ещё от текущего теста
+            const nextExerciseName = currentExerciseData.nextThemeFirstExercise || null;
+            const currentThemeName = currentExerciseData.themeName || null;
+
+            status.innerHTML = `
+                <div class="alert alert-success mt-3">
+                    <strong>Тест пройден!</strong><br>
+                    Ошибок: ${mistakes} из ${allowed} допустимых.<br>
+                    Переходим к следующей теме...
+                </div>
+            `;
+
+            setTimeout(async () => {
+                Classroom.debug.log('nextThemeFirstExercise:', nextExerciseName);
+                Classroom.debug.log('currentThemeName:', currentThemeName);
+
+                // 1. Определяем имя следующей темы
+                let nextThemeName = null;
+
+                if (nextExerciseName) {
+                    try {
+                        const res = await fetch(`/api/exercise/${nextExerciseName}`);
+                        const nextData = await res.json();
+                        nextThemeName = nextData.themeName || null;
+                    } catch (err) {
+                        console.error(err);
+                    }
+                }
+
+                // 2. Запасной вариант — следующая тема из дерева
+                if (!nextThemeName && currentThemeName) {
+                    nextThemeName = findNextThemeName(currentThemeName);
+                    Classroom.debug.log('nextThemeName from tree:', nextThemeName);
+                }
+
+                if (!nextThemeName) {
+                    const body = document.getElementById('exerciseBody');
+                    if (body) {
+                        body.innerHTML = `
+                            <div class="alert alert-success text-center py-5">
+                                <h5>Тема завершена</h5>
+                                <p>Поздравляем! Вы прошли все доступные блоки.</p>
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                // 3. Данные темы из дерева
+                const themeData = Classroom.utils.findThemeByName(nextThemeName);
+                if (!themeData) {
+                    console.warn('Тема не найдена в дереве:', nextThemeName);
+                    if (nextExerciseName) loadExercise(nextExerciseName);
+                    return;
+                }
+
+                // 4. Подсветка в дереве
+                document.querySelectorAll('.theme-node').forEach(node => {
+                    node.classList.remove('open', 'current');
+                });
+
+                const themeNode = document.querySelector(`.theme-node[data-theme="${nextThemeName}"]`);
+                if (themeNode) {
+                    themeNode.classList.add('open', 'current');
+                    let parent = themeNode.parentElement;
+                    while (parent) {
+                        if (parent.classList.contains('tree-node')) parent.classList.add('open');
+                        parent = parent.parentElement;
+                    }
+                }
+
+                // Сохраняем прогресс: текущее упражнение = первое упражнение новой темы
+                const exerciseToSave = nextExerciseName
+                    || (themeData && themeData.first_exercise) // если есть в дереве
+                    || null;
+
+                // Если nextExerciseName нет — берём из эндпоинта блоков темы
+                if (!exerciseToSave && nextThemeName) {
+                    try {
+                        const res = await fetch(`/api/theme/${nextThemeName}/exercises`);
+                        const starters = await res.json(); // ["..._V001", "..._Q001", "..._T001"]
+                        if (Array.isArray(starters) && starters.length > 0) {
+                            await saveCurrentExercise(starters[0]);
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    }
+                } else if (exerciseToSave) {
+                    await saveCurrentExercise(exerciseToSave);
+                }
+
+                // 5. Заставка темы
+                Classroom.lobby.showThemeLobby(
+                    nextThemeName,
+                    themeData.title || '',
+                    themeData.exercise_counts || {},
+                    themeData.is_available ?? true,
+                    themeData.is_completed ?? false,
+                    true,
+                    currentAccessLevel
+                );
+
+                Classroom.debug.log('Показана заставка темы:', nextThemeName);
+            }, 2200);
+
+
+        } else {
+            // Тест не сдан
+            status.innerHTML = `
+                <div class="alert alert-danger mt-3">
+                    <strong>Тест не сдан.</strong><br>
+                    Ошибок: ${mistakes} (допустимо не более ${allowed - 1}).<br>
+                    Возвращаемся в начало темы...
+                </div>
+            `;
+
+            if (currentExerciseData.currentThemeFirstExercise) {
+                setTimeout(() => {
+                    loadExercise(currentExerciseData.currentThemeFirstExercise);
+                }, 2800);
+            }
+        }
+    }
+</script>
+
+
+<!-- ===================================================== -->
+<!-- 9. ОБЩИЕ КОМПОНЕНТЫ ПЛЕЕРА                            -->
+<!-- ===================================================== -->
+<script>
+    // Функции, которые используются и в Q, и в T:
+    // - makeSlotDroppable()
+    // - moveVariantWithAnimation()
+    // - playErrorSound()
+    // - markVariantAsUsed()
+</script>
+
+<!-- 10. ИНИЦИАЛИЗАЦИЯ СТРАНИЦЫ                            -->
+<script>
+    'use strict';
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        // === 1. Инициализация дерева ===
+        if (Classroom.tree && typeof Classroom.tree.initTreeClickHandler === 'function') {
+            Classroom.tree.initTreeClickHandler();
+            Classroom.debug.log('Дерево инициализировано');
+        }
+
+        // === 2. Определяем функцию входа в тему ===
+        // (пока заглушка, чтобы не падало при клике на кнопку "Войти в тему")
+        Classroom.enterTheme = async function(themeName) {
+            Classroom.debug.log('Вызван enterTheme для темы:', themeName);
+
+            // Проверка изменения доступа (можно оставить)
+            if (typeof checkIfAccessChanged === 'function') {
+                const changed = await checkIfAccessChanged();
+                if (changed) return;
+            }
+
+            // Запускаем commonPlayer
+            await commonPlayer(themeName);
+
+
+            // TODO: Здесь будет полноценная логика входа в тему
+            // Пока просто выводим сообщение
+            const container = document.getElementById('exerciseBody');
+            // if (container) {
+            //     container.innerHTML = `
+            //         <div class="alert alert-info text-center py-5">
+            //             <h5>Вход в тему: ${themeName}</h5>
+            //             <p class="mb-0">Функционал плеера пока в разработке.</p>
+            //         </div>
+            //     `;
+            // }
+        };
+
+        // === 3. Автозагрузка текущей темы (если есть) ===
+        const currentThemeNode = document.querySelector('.theme-node.current');
+
+        if (currentThemeNode && Classroom.tree && typeof Classroom.tree.handleThemeClick === 'function') {
+            setTimeout(() => {
+                Classroom.tree.handleThemeClick(currentThemeNode);
+                Classroom.debug.log('Автоматически открыта текущая тема');
+            }, 400);
+        }
+        else {
+            // Если нет текущей темы — можно показать общее сообщение
+            const container = document.getElementById('exerciseBody');
+            if (container && !currentThemeNode) {
+                container.innerHTML = `
+                    <div class="text-center py-5 text-muted">
+                        <h5>Выберите тему из меню слева</h5>
+                    </div>
+                `;
+            }
+        }
+
+        Classroom.debug.log('Инициализация завершена');
+    });
+</script>
+
+
+<!-- ===================================================== -->
+<!-- 11. DEBUG / ВРЕМЕННЫЕ ФУНКЦИИ (опционально)           -->
+<!-- ===================================================== -->
+<script>
+    // Временные функции для отладки, тестовые кнопки и т.д.
+    // Можно будет легко удалить позже.
+</script>
+
+<!--- установить Playwrite -------------------------------------------------------------------------------------->
+<!--- установить протестировать есть ли автоматический reload при смене доступа на бэкенде ---------------------->
+
+{% endblock %}
+
