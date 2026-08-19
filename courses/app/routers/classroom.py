@@ -1,293 +1,378 @@
-"""
-Роутер classroom: страница, API упражнений и плеер после рефакторинга.
+from fastapi import APIRouter, Request, HTTPException, Path, Form, Depends, Body, Query
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
-Новый контракт плеера
----------------------
-GET /api/classroom/player
-    theme, view=lobby|exercise, player=vqt|text_intensive, exercise?
+from app.db.dependencies import DBPoolDep, CurrentUser, RequiredUser
+from app.middleware.csrf import verify_csrf
+from app.repositories.classroom import get_classroom_tree
+from app.routers.deps import LangDep, render_template
 
-Ответ: {html, meta}
-
-Оболочка classroom.html вставляет html в #stickySlot / #contentSlot.
-Плеер V/Q/T затем ходит в уже существующие:
-    GET  /api/theme/{theme}/exercises
-    GET  /api/exercise/{name}
-    POST /api/user/current-exercise
-
-Если эти три маршрута у Вас уже реализованы в этом файле —
-оставьте свои функции и не дублируйте заглушки ниже.
-Блок PLAYER использует те же хелперы.
-"""
-
-from __future__ import annotations
-
-import re
-from typing import Any
-
-from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+# --- Homepage --------------------------------------------------
+router = APIRouter(tags=["classroom"])
 
 
-router = APIRouter()
+def parse_variants(variants_str: str | None) -> list[list[str]]:
+    """
+    Парсит строку вида:
+    [ |а|о|и][ |се|съм|си|е|сме|сте|са|ли][ |се|съм|си|е|сме|сте|са|ли]
 
-PLAYERS = {
-    "vqt": "classroom/player_vqt.html",
-    "text_intensive": "classroom/player_text_intensive.html",
-}
+    Возвращает:
+    [
+        [' ', 'а', 'о', 'и'],
+        [' ', 'се', 'съм', 'си', 'е', 'сме', 'сте', 'са', 'ли'],
+        ...
+    ]
+    """
+    if not variants_str:
+        return []
 
+    result = []
+    current = ""
+    i = 0
 
-# ---------------------------------------------------------------------------
-# Шаблоны / утилиты
-# ---------------------------------------------------------------------------
-
-def resolve_templates(request: Request) -> Jinja2Templates:
-    templates = getattr(request.app.state, "templates", None)
-    if templates is not None:
-        return templates
-    return Jinja2Templates(directory="courses/app/templates")
-
-
-def theme_heading(theme_name: str) -> str:
-    match = re.match(r"A(\d)(\d{2,3})_H(\d+)", theme_name or "")
-    if not match:
-        return theme_name
-    return (
-        f"Курс A{match.group(1)}, "
-        f"Урок {match.group(2).zfill(2)}, "
-        f"Тема {match.group(3).zfill(2)}:"
-    )
-
-
-def has_tariff_restrictions(exercise_counts: dict | None, access_level: int) -> bool:
-    if not exercise_counts:
-        return False
-    for counts in exercise_counts.values():
-        if not isinstance(counts, (list, tuple)) or len(counts) < 3:
+    while i < len(variants_str):
+        if variants_str[i] == '[':
+            if current:
+                # На случай, если перед первой скобкой что-то было
+                result.append(current.strip().split('|'))
+                current = ""
+            i += 1
             continue
-        current = counts[access_level] if access_level < len(counts) else 0
-        if current < max(counts):
-            return True
-    return False
+
+        if variants_str[i] == ']':
+            if current:
+                result.append(current.strip().split('|'))
+                current = ""
+            i += 1
+            continue
+
+        current += variants_str[i]
+        i += 1
+
+    # Если что-то осталось после последней скобки
+    if current.strip():
+        result.append(current.strip().split('|'))
+
+    # Убираем пустые строки внутри групп
+    cleaned = []
+    for group in result:
+        cleaned_group = [item for item in group if item != ""]
+        if cleaned_group:
+            cleaned.append(cleaned_group)
+
+    return cleaned
 
 
-def detect_player(theme: dict, requested: str | None = None) -> str:
-    if requested in PLAYERS:
-        return requested
-    for key in ("player", "kind", "lab"):
-        value = str(theme.get(key) or "").lower()
-        if value in PLAYERS:
-            return value
-        if value in {"listening", "textlab", "text_lab", "intensive"}:
-            return "text_intensive"
-    return "vqt"
-
-
-def courses_url_for(request: Request) -> str:
-    source = (
-        getattr(request.state, "source_lang", None)
-        or request.path_params.get("source_lang")
-        or "bg"
-    )
-    ui = (
-        getattr(request.state, "ui_lang", None)
-        or request.path_params.get("ui_lang")
-        or "ru"
-    )
-    return f"/{source}/{ui}/courses/"
-
-
-def current_user_meta(request: Request) -> tuple[int, str]:
-    user = getattr(request.state, "user", None)
-    if user is None:
-        return 0, "student"
-    level = getattr(user, "access_level", 0) or 0
-    role = getattr(user, "role", "student") or "student"
-    return int(level), str(role)
-
-
-def find_theme_in_tree(tree: dict | None, theme_name: str) -> dict | None:
-    if not tree:
-        return None
-    for course in tree.get("courses") or []:
-        for lesson in course.get("lessons") or []:
-            for theme in lesson.get("themes") or []:
-                if theme.get("name") == theme_name:
-                    return theme
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Доступ к данным.
-# Сначала пробуем функции, которые уже могут быть в этом модуле
-# (Ваш готовый classroom.py). Иначе — дерево со страницы / request.state.
-# ---------------------------------------------------------------------------
-
-def load_theme(theme_name: str, request: Request | None = None) -> dict | None:
-    for name in ("get_theme", "get_theme_by_name", "fetch_theme"):
-        fn = globals().get(name)
-        if callable(fn) and fn is not load_theme:
-            try:
-                data = fn(theme_name)
-                if data:
-                    return dict(data)
-            except TypeError:
-                continue
-
-    tree = None
-    if request is not None:
-        tree = getattr(request.state, "tree", None) or getattr(request.app.state, "tree", None)
-    if tree:
-        found = find_theme_in_tree(tree, theme_name)
-        if found:
-            found = dict(found)
-            found.setdefault("name", theme_name)
-            return found
-
-    return {"name": theme_name, "title": theme_name, "exercise_counts": {}}
-
-
-def load_exercise(exercise_name: str, show_correct: bool = False) -> dict | None:
-    for name in ("get_exercise", "get_exercise_payload", "fetch_exercise"):
-        fn = globals().get(name)
-        if callable(fn) and fn is not load_exercise:
-            try:
-                data = fn(exercise_name, show_correct)
-            except TypeError:
-                try:
-                    data = fn(exercise_name)
-                except TypeError:
-                    continue
-            if data:
-                payload = dict(data)
-                payload.setdefault("name", exercise_name)
-                return payload
-    return None
-
-
-def load_block_starters(theme_name: str) -> list[str]:
-    for name in ("get_theme_exercises", "get_theme_block_starters", "fetch_theme_exercises"):
-        fn = globals().get(name)
-        if callable(fn) and fn is not load_block_starters:
-            try:
-                data = fn(theme_name)
-                if data:
-                    return list(data)
-            except TypeError:
-                continue
-    return []
-
-
-# ---------------------------------------------------------------------------
-# Сборка HTML плеера
-# ---------------------------------------------------------------------------
-
-def build_player_html(
+@router.get("/{source_lang}/{ui_lang}/classroom/", response_class=HTMLResponse)
+@router.get("/{source_lang}/{ui_lang}/classroom", response_class=HTMLResponse)
+async def get_classroom(
     request: Request,
-    theme: dict,
-    view: str,
-    player: str,
-    exercise: dict | None,
-) -> str:
-    access_level, _role = current_user_meta(request)
-    theme_name = theme.get("name") or ""
-    context: dict[str, Any] = {
-        "view": view,
-        "theme_name": theme_name,
-        "theme_title": theme.get("title") or "",
-        "theme_heading": theme_heading(theme_name),
-        "exercise_counts": theme.get("exercise_counts") or {},
-        "is_available": theme.get("is_available", True),
-        "is_completed": theme.get("is_completed", False),
-        "is_current": theme.get("is_current", False),
-        "has_tariff_restrictions": has_tariff_restrictions(
-            theme.get("exercise_counts"), access_level
-        ),
-        "courses_url": courses_url_for(request),
-        "exercise": exercise,
-        "audio_url": (exercise or {}).get("audio_url") or theme.get("audio_url") or "",
-        "task_type": (exercise or {}).get("task_type") or "",
-        "prompt": (exercise or {}).get("prompt") or (exercise or {}).get("question") or "",
-    }
-    template_name = PLAYERS.get(player, PLAYERS["vqt"])
-    return resolve_templates(request).get_template(template_name).render(**context)
-
-
-# ---------------------------------------------------------------------------
-# PLAYER
-# ---------------------------------------------------------------------------
-
-@router.get("/api/classroom/player")
-async def classroom_player(
-    request: Request,
-    theme: str,
-    view: str = "lobby",
-    player: str | None = None,
-    exercise: str | None = None,
+    lang_pair: LangDep,
+    pool: DBPoolDep,
+    current_user: RequiredUser,
 ):
-    theme_data = load_theme(theme, request) or {"name": theme}
-    theme_data.setdefault("name", theme)
-    mode = detect_player(theme_data, player)
+    lang_prefix = f"{lang_pair.source_lang}{lang_pair.ui_lang}".upper()
 
-    exercise_data = None
-    if exercise:
-        exercise_data = load_exercise(exercise)
-        if exercise_data:
-            exercise_data.setdefault("name", exercise)
+    user_access_level = current_user.get("access_level", 0) if current_user else 0
 
-    html = build_player_html(request, theme_data, view, mode, exercise_data)
-    return JSONResponse({
-        "html": html,
-        "meta": {
-            "player": mode,
-            "theme_name": theme,
-            "view": view,
-            "exercise_name": exercise,
-            "exercise": exercise_data,
-        },
-    })
+    # Определяем, какую тему показывать по умолчанию
+    target_exercise = current_user.get("current_exercise") if current_user else None
 
+    tree_data = await get_classroom_tree(
+        pool=pool,
+        lang_prefix=lang_prefix,
+        user_access_level=user_access_level,
+        target_exercise=target_exercise
+    )
 
-# ---------------------------------------------------------------------------
-# API, которые вызывает плеер V/Q/T после входа в тему.
-# Если одноимённые маршруты уже есть в Вашем classroom.py — удалите заглушки.
-# ---------------------------------------------------------------------------
+    access_names = {
+        0: "Базовый",
+        1: "Стандарт",
+        2: "Премиум",
+    }
 
-@router.get("/api/theme/{theme_name}/exercises")
-async def theme_exercises(theme_name: str):
-    starters = load_block_starters(theme_name)
-    return JSONResponse(starters)
+    return render_template(
+        name="classroom.html",
+        request=request,
+        lang_pair=lang_pair,
+        context={
+            "current_page": "classroom",
+            "tree": tree_data,
+            "current_exercise": target_exercise,
+            "access_level": user_access_level,
+            "access_level_name": access_names.get(user_access_level),
+            "access_until": current_user.get("access_until"),
+            "role": getattr(request.state, "role", "user"),
+            "loyalty_points": current_user.get("loyalty_points", 0),
+        }
+    )
 
 
 @router.get("/api/exercise/{exercise_name}")
-async def exercise_payload(exercise_name: str, show_correct: int = 0):
-    data = load_exercise(exercise_name, show_correct=bool(show_correct))
-    if not data:
-        return JSONResponse({"error": f"Упражнение не найдено: {exercise_name}"}, status_code=404)
-    return JSONResponse(data)
+async def get_exercise(
+    exercise_name: str,
+    pool: DBPoolDep,
+    current_user: CurrentUser,
+    show_correct: bool = Query(False, alias="show_correct")
+):
+    user_access_level = current_user.get("access_level", 0) if current_user else 0
+
+    # --- Получаем row - строку упражнения из БД (таблица exercises) --------------
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT 
+                name, title, question, variants, answers, 
+                exercise_type, theme_name,
+                youtube_video, theory, duration, duration_limit
+            FROM exercises
+            WHERE name = $1
+        """, exercise_name)
+
+        if not row:
+            return {"error": "Exercise not found"}
+
+        # --- Получаем информацию о теме, уроке и курсе этого упражнения ------------
+        theme_info = await conn.fetchrow(
+            "SELECT name, title FROM themes WHERE name = $1",
+            row["theme_name"]
+        )
+        theme_name = theme_info["name"]
+        theme_title = theme_info["title"].capitalize()
+
+        course_level = f" Уровень {theme_name[4:6]}"   # BGRUA1002_H003[4:6] = A1
+        lesson_number = f"Урок {theme_name[7:9]}"      # BGRUA1002_H003[7:9] = 02
+        theme_number = f"Тема {theme_name[12:]}"       # BGRUA1002_H003[7:9] = 03
+        exercise_full_name = ", ".join([course_level, lesson_number, theme_number]) + ":"
+
+        ex_type = row["exercise_type"]
+
+        # --- Базовый результат (общий для всех типов) ---------------------
+        result = {
+            "name": row["name"],
+            "title": row["title"],
+            "question": row["question"],
+            "type": ex_type,
+            "themeName": theme_name,
+            "theme_title": theme_title,
+            "exercise_full_name": exercise_full_name,
+            "showCorrectAnswers": show_correct,
+        }
+
+        # --- Упражнение V (ВИДЕО) -----------------------------------------
+        if ex_type == "V":
+            result.update({
+                "youtube_video": row["youtube_video"],
+                "theory": row["theory"],
+                "duration": row["duration"],
+                "duration_limit": row["duration_limit"],
+            })
+
+            # --- Первые упражнения Q и T для кнопки "Продолжить" ------------
+            # --- Первое упражнение Q: ---------------------------------------
+            first_q = await conn.fetchval("""
+                SELECT name FROM exercises
+                WHERE theme_name = $1 
+                  AND exercise_type = 'Q'
+                  AND $2 = ANY(visibility)
+                ORDER BY pos LIMIT 1
+            """, theme_name, user_access_level)
+
+            # --- Первое упражнение T: ---------------------------------------
+            first_test = await conn.fetchval("""
+                SELECT name FROM exercises
+                WHERE theme_name = $1 
+                  AND exercise_type = 'T'
+                  AND $2 = ANY(visibility)
+                ORDER BY pos LIMIT 1
+            """, theme_name, user_access_level)
+
+            result.update({
+                "firstQExercise": first_q,
+                "firstTestExercise": first_test,
+            })
 
 
-@router.get("/api/theme/{theme_name}/text-intensive")
-async def theme_text_intensive(theme_name: str):
-    theme = load_theme(theme_name) or {"name": theme_name}
-    return JSONResponse({
-        "theme_name": theme_name,
-        "task_type": theme.get("task_type") or "true_false",
-        "prompt": theme.get("prompt") or theme.get("title") or "",
-        "audio_url": theme.get("audio_url") or "",
-        "choices": theme.get("choices") or [],
-        "items": theme.get("items") or [],
-    })
+        # --- Упражнение Q -----------------------------------------------
+        if ex_type == "Q":
+            q_exercises = await conn.fetch("""
+                SELECT name, title, pos, exercise_type
+                FROM exercises
+                WHERE theme_name = $1
+                  AND exercise_type = 'Q'
+                  AND $2 = ANY(visibility)
+                ORDER BY pos
+            """, theme_name, user_access_level)
 
+            current_index = next((i for i, ex in enumerate(q_exercises) if ex["name"] == exercise_name), 0)
 
-class CurrentExerciseBody(BaseModel):
-    exercise_name: str
+            first_test = await conn.fetchval("""
+                SELECT name FROM exercises
+                WHERE theme_name = $1 
+                  AND exercise_type = 'T'
+                  AND $2 = ANY(visibility)
+                ORDER BY pos LIMIT 1
+            """, theme_name, user_access_level)
+
+            result.update({
+                "variants": parse_variants(row["variants"]) if row["variants"] else [],
+                "correctCombinations": parse_variants(row["answers"]) if row["answers"] else [],
+                "slots_count": len(parse_variants(row["variants"]) if row["variants"] else []),
+                "themeQExercises": [dict(ex) for ex in q_exercises],
+                "currentQIndex": current_index,
+                "firstTestExercise": first_test
+            })
+
+        # --- Упражнение T --------------------------------------------------
+        elif ex_type == "T":
+            t_exercises = await conn.fetch("""
+                SELECT name, title, pos, exercise_type
+                FROM exercises
+                WHERE theme_name = $1
+                  AND exercise_type = 'T'
+                  AND $2 = ANY(visibility)
+                ORDER BY pos
+            """, theme_name, user_access_level)
+
+            current_t_index = next((i for i, ex in enumerate(t_exercises) if ex["name"] == exercise_name), 0)
+
+            # Следующая тема → первое V (или первое упражнение)
+            next_theme_row = await conn.fetchrow("""
+                SELECT name FROM themes
+                WHERE lesson_name = (
+                    SELECT lesson_name FROM themes WHERE name = $1
+                )
+                  AND pos > (SELECT pos FROM themes WHERE name = $1)
+                ORDER BY pos LIMIT 1
+            """, theme_name)
+
+            next_theme_first_v = None
+            if next_theme_row:
+                next_theme_first_v = await conn.fetchval("""
+                    SELECT name FROM exercises
+                    WHERE theme_name = $1
+                      AND exercise_type = 'V'
+                      AND $2 = ANY(visibility)
+                    ORDER BY pos LIMIT 1
+                """, next_theme_row["name"], user_access_level)
+
+            # Первое упражнение текущей темы (для ретейка)
+            current_theme_first = await conn.fetchval("""
+                SELECT name FROM exercises
+                WHERE theme_name = $1 AND $2 = ANY(visibility)
+                ORDER BY 
+                    CASE exercise_type WHEN 'V' THEN 1 WHEN 'Q' THEN 2 WHEN 'T' THEN 3 ELSE 4 END, pos
+                LIMIT 1
+            """, theme_name, user_access_level)
+
+            result.update({
+                "variants": parse_variants(row["variants"]) if row["variants"] else [],
+                "correctCombinations": parse_variants(row["answers"]) if row["answers"] else [],
+                "themeTExercises": [dict(ex) for ex in t_exercises],
+                "currentTIndex": current_t_index,
+                "nextThemeFirstExercise": next_theme_first_v,
+                "currentThemeFirstExercise": current_theme_first,
+                "mistakesAllowed": 3,
+            })
+
+        return result
 
 
 @router.post("/api/user/current-exercise")
-async def save_current_exercise(body: CurrentExerciseBody, request: Request):
-    saver = globals().get("save_user_current_exercise")
-    if callable(saver):
-        saver(request, body.exercise_name)
-    return JSONResponse({"ok": True, "exercise_name": body.exercise_name})
+async def save_current_exercise(
+    pool: DBPoolDep,
+    current_user: CurrentUser,
+    exercise_name: str = Body(..., embed=True),
+):
+
+    if not current_user:
+        return {"success": False}
+
+    try:
+        # обновляем только если pos нового > pos старого упражнения
+        await pool.execute("""
+            UPDATE users
+                SET current_exercise = $1
+                WHERE id = $2
+                  AND (
+                      current_exercise IS NULL
+                      OR (
+                          SELECT pos FROM exercises WHERE name = $1
+                      ) > (
+                          SELECT pos FROM exercises WHERE name = users.current_exercise
+                      )
+                  )
+        """, exercise_name, current_user["user_id"])
+        return {"success": True}
+
+    except Exception as e:
+        print(f"[BACKEND] ОШИБКА при UPDATE: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/api/theme/{theme_name}/exercises")
+async def get_theme_block_starters(
+    theme_name: str,
+    pool: DBPoolDep,
+    current_user: CurrentUser,
+):
+    """
+    Возвращает первые упражнения каждого блока (V, Q, T),
+    которые доступны пользователю.
+    """
+    user_access_level = current_user.get("access_level", 0) if current_user else 0
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT name
+            FROM (
+                SELECT DISTINCT ON (exercise_type)
+                       name,
+                       pos
+                FROM exercises
+                WHERE theme_name = $1 
+                  AND $2 = ANY(visibility)
+                ORDER BY exercise_type, pos
+            ) t
+            ORDER BY pos;
+            """, theme_name, user_access_level)
+        print([row["name"] for row in rows])
+        return [row["name"] for row in rows]  # ['BGRUA1002_V001', 'BGRUA1002_Q001', 'BGRUA1002_T001']
+
+
+@router.get("/api/user/access-level")
+async def get_user_access_level(current_user: CurrentUser):
+    """
+    Возвращает текущий уровень доступа пользователя.
+    Используется для проверки, не истёк ли доступ.
+    """
+    if not current_user:
+        return {"accessLevel": 0}
+
+    return {
+        "accessLevel": current_user.get("access_level", 0),
+        # Можно также вернуть дату окончания подписки, если нужно
+        # "subscriptionEnd": current_user.get("subscription_end")
+    }
+
+
+@router.get("/api/theme/{theme_name}/first-video")
+async def get_first_video_of_theme(
+    theme_name: str,
+    pool: DBPoolDep,
+    current_user: CurrentUser
+):
+    user_access_level = current_user.get("access_level", 0) if current_user else 0
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT name 
+            FROM exercises 
+            WHERE theme_name = $1 
+              AND exercise_type = 'V'
+              AND $2 = ANY(visibility)
+            ORDER BY pos 
+            LIMIT 1
+        """, theme_name, user_access_level)
+
+        if row:
+            return {"exercise_name": row["name"]}
+        return {"exercise_name": None}
