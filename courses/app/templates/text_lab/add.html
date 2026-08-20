@@ -1,0 +1,458 @@
+{% extends "base_page.html" %}
+
+{% block title %}Text Lab — Добавить упражнение{% endblock %}
+
+{% block container %}
+
+<style>
+    .educat-primary-header {
+        background: #86bc42 !important;
+        color: #ffffff !important;
+        padding: 12px 18px;
+        font-weight: 600;
+        border-radius: 4px 4px 0 0;
+    }
+
+    .form-card {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        max-width: 860px;
+        margin: 0 auto;
+    }
+
+    .form-card-header {
+        background: #2d3e50;
+        color: #fff;
+        padding: 16px 20px;
+    }
+
+    .form-card-body {
+        padding: 24px;
+    }
+
+    .type-fields {
+        display: none;
+        border-top: 1px solid #eee;
+        margin-top: 20px;
+        padding-top: 20px;
+    }
+
+    .type-fields.active {
+        display: block;
+    }
+
+    .dynamic-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        align-items: flex-start;
+    }
+
+    .dynamic-row input,
+    .dynamic-row textarea {
+        flex: 1;
+    }
+
+    .btn-remove-row {
+        flex-shrink: 0;
+    }
+
+    .help-text {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+</style>
+
+<!-- Breadcrumb -->
+<div class="breadcrumb-banner-area"
+     style="background: rgba(0,0,0,0) url('/static/img/banner/4.jpg') no-repeat scroll 0 0; background-size: cover;">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="breadcrumb-text">
+                    <h1 class="text-center">Добавить упражнение</h1>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="section-padding">
+    <div class="container">
+        <div class="mb-3">
+            <a href="{{ url_for('text_lab_play', source_lang=source_lang, ui_lang=ui_lang) }}"
+               class="btn btn-outline-secondary btn-sm">
+                ← Назад к плееру
+            </a>
+        </div>
+
+        <div class="form-card">
+            <div class="form-card-header">
+                <h4 class="mb-0">Новое упражнение для блока «{{ text_block.text_block }}»</h4>
+            </div>
+
+            <div class="form-card-body">
+                <form id="addExerciseForm" onsubmit="return TextLabAdd.submit(event)">
+
+                    <!-- Общие поля -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Тип упражнения *</label>
+                        <select class="form-select" id="exType" name="type" required onchange="TextLabAdd.onTypeChange()">
+                            <option value="">— выберите тип —</option>
+                            <option value="true_false">Верно / Неверно</option>
+                            <option value="gap_fill">Заполнение пропусков</option>
+                            <option value="order">Расставить по порядку</option>
+                            <option value="short_answer">Краткий ответ</option>
+                            <option value="multiple_choice">Выбор варианта</option>
+                            <option value="open">Открытый ответ / пересказ</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Название *</label>
+                        <input type="text" class="form-control" id="exTitle" name="title" required
+                               placeholder="Например: Верно или неверно — часть 1">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Инструкция для студента</label>
+                        <textarea class="form-control" id="exInstruction" name="instruction" rows="2"
+                                  placeholder="Прослушайте аудио и выполните задание..."></textarea>
+                    </div>
+
+                    <!-- ========== true_false ========== -->
+                    <div class="type-fields" id="fields_true_false">
+                        <h5 class="mb-3">Утверждения</h5>
+                        <p class="help-text mb-3">Добавьте утверждения и укажите, верны они или нет.</p>
+                        <div id="tfItems"></div>
+                        <button type="button" class="btn btn-outline-success btn-sm mt-2" onclick="TextLabAdd.addTfItem()">
+                            + Добавить утверждение
+                        </button>
+                    </div>
+
+                    <!-- ========== gap_fill ========== -->
+                    <div class="type-fields" id="fields_gap_fill">
+                        <h5 class="mb-3">Текст с пропусками</h5>
+                        <p class="help-text mb-2">
+                            Используйте <code>_____</code> (5 подчёркиваний) для обозначения пропуска.
+                        </p>
+                        <div class="mb-3">
+                            <textarea class="form-control" id="gapText" rows="4"
+                                      placeholder="Вчера аз _____ на пазар и _____ много плодове."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Правильные ответы (через запятую, в порядке пропусков)</label>
+                            <input type="text" class="form-control" id="gapAnswers"
+                                   placeholder="отидох, купих">
+                        </div>
+                    </div>
+
+                    <!-- ========== order ========== -->
+                    <div class="type-fields" id="fields_order">
+                        <h5 class="mb-3">События / пункты</h5>
+                        <p class="help-text mb-3">
+                            Введите события в <strong>правильном</strong> порядке. 
+                            В плеере они будут перемешаны, студент должен расставить их верно.
+                        </p>
+                        <div id="orderItems"></div>
+                        <button type="button" class="btn btn-outline-success btn-sm mt-2" onclick="TextLabAdd.addOrderItem()">
+                            + Добавить пункт
+                        </button>
+                    </div>
+
+                    <!-- ========== short_answer ========== -->
+                    <div class="type-fields" id="fields_short_answer">
+                        <h5 class="mb-3">Вопросы с кратким ответом</h5>
+                        <div id="saItems"></div>
+                        <button type="button" class="btn btn-outline-success btn-sm mt-2" onclick="TextLabAdd.addSaItem()">
+                            + Добавить вопрос
+                        </button>
+                    </div>
+
+                    <!-- ========== multiple_choice ========== -->
+                    <div class="type-fields" id="fields_multiple_choice">
+                        <h5 class="mb-3">Варианты ответа</h5>
+                        <div id="mcOptions"></div>
+                        <button type="button" class="btn btn-outline-success btn-sm mt-2" onclick="TextLabAdd.addMcOption()">
+                            + Добавить вариант
+                        </button>
+                        <div class="mt-3">
+                            <label class="form-label">Индекс правильного варианта (начиная с 0)</label>
+                            <input type="number" class="form-control" id="mcCorrect" min="0" value="0" style="max-width:120px;">
+                        </div>
+                    </div>
+
+                    <!-- ========== open ========== -->
+                    <div class="type-fields" id="fields_open">
+                        <p class="help-text">
+                            Для открытого ответа дополнительных полей не требуется.
+                            Студент просто пишет текст в свободной форме.
+                        </p>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn button-in-table-green">
+                            Сохранить упражнение
+                        </button>
+                        <a href="{{ url_for('text_lab_play', source_lang=source_lang, ui_lang=ui_lang) }}"
+                           class="btn btn-outline-secondary"
+                        >
+                            Отмена
+                        </a>
+                    </div>
+
+                    <div id="formMessage" class="mt-3"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block js_scripts %}
+<script>
+'use strict';
+
+window.TextLabAdd = {
+
+    onTypeChange() {
+        const type = document.getElementById('exType').value;
+
+        document.querySelectorAll('.type-fields').forEach(el => el.classList.remove('active'));
+
+        if (type) {
+            const block = document.getElementById('fields_' + type);
+            if (block) block.classList.add('active');
+        }
+
+        if (type === 'true_false' && document.getElementById('tfItems').children.length === 0) {
+            this.addTfItem();
+            this.addTfItem();
+        }
+        if (type === 'order' && document.getElementById('orderItems').children.length === 0) {
+            this.addOrderItem();
+            this.addOrderItem();
+            this.addOrderItem();
+        }
+        if (type === 'short_answer' && document.getElementById('saItems').children.length === 0) {
+            this.addSaItem();
+        }
+        if (type === 'multiple_choice' && document.getElementById('mcOptions').children.length === 0) {
+            this.addMcOption();
+            this.addMcOption();
+            this.addMcOption();
+        }
+    },
+
+    addTfItem() {
+        const container = document.getElementById('tfItems');
+        const row = document.createElement('div');
+        row.className = 'mb-3 p-3 border rounded';
+        row.innerHTML = `
+            <div class="dynamic-row mb-2">
+                <input type="text" class="form-control" placeholder="Текст утверждения" data-tf-text>
+                <select class="form-select" style="max-width:140px;" data-tf-correct>
+                    <option value="true">Верно</option>
+                    <option value="false">Неверно</option>
+                </select>
+                <button type="button" class="btn btn-outline-danger btn-sm btn-remove-row" onclick="this.closest('.mb-3').remove()">×</button>
+            </div>
+            <input type="text" class="form-control form-control-sm" placeholder="Комментарий при ошибке (необязательно)" data-tf-comment>
+        `;
+        container.appendChild(row);
+    },
+
+    addOrderItem() {
+        const container = document.getElementById('orderItems');
+        const row = document.createElement('div');
+        row.className = 'dynamic-row';
+        row.innerHTML = `
+            <span class="text-muted mt-2" style="min-width:24px;">${container.children.length + 1}.</span>
+            <input type="text" class="form-control" placeholder="Событие / пункт" data-order-text>
+            <button type="button" class="btn btn-outline-danger btn-sm btn-remove-row" onclick="this.parentElement.remove(); TextLabAdd.renumberOrder()">×</button>
+        `;
+        container.appendChild(row);
+    },
+
+    renumberOrder() {
+        const rows = document.querySelectorAll('#orderItems .dynamic-row');
+        rows.forEach((row, i) => {
+            const num = row.querySelector('span');
+            if (num) num.textContent = (i + 1) + '.';
+        });
+    },
+
+    addSaItem() {
+        const container = document.getElementById('saItems');
+        const row = document.createElement('div');
+        row.className = 'mb-3 p-3 border rounded';
+        row.innerHTML = `
+            <div class="mb-2">
+                <input type="text" class="form-control" placeholder="Вопрос" data-sa-question>
+            </div>
+            <div class="dynamic-row">
+                <input type="text" class="form-control" placeholder="Правильные ответы через запятую (София, в Софии)" data-sa-answers>
+                <button type="button" class="btn btn-outline-danger btn-sm btn-remove-row" onclick="this.closest('.mb-3').remove()">×</button>
+            </div>
+        `;
+        container.appendChild(row);
+    },
+
+    addMcOption() {
+        const container = document.getElementById('mcOptions');
+        const row = document.createElement('div');
+        row.className = 'dynamic-row';
+        row.innerHTML = `
+            <span class="text-muted mt-2" style="min-width:24px;">${container.children.length}.</span>
+            <input type="text" class="form-control" placeholder="Вариант ответа" data-mc-option>
+            <button type="button" class="btn btn-outline-danger btn-sm btn-remove-row" onclick="this.parentElement.remove()">×</button>
+        `;
+        container.appendChild(row);
+    },
+
+    collectPayload() {
+        const type = document.getElementById('exType').value;
+        const title = document.getElementById('exTitle').value.trim();
+        const instruction = document.getElementById('exInstruction').value.trim();
+
+        if (!type || !title) {
+            alert('Заполните тип и название');
+            return null;
+        }
+
+        const payload = { type, title, instruction };
+
+        if (type === 'true_false') {
+            const items = [];
+            document.querySelectorAll('#tfItems .mb-3, #tfItems .dynamic-row').forEach(row => {
+                const textEl = row.querySelector('[data-tf-text]');
+                if (!textEl) return;
+                const text = textEl.value.trim();
+                const correct = row.querySelector('[data-tf-correct]').value === 'true';
+                const commentEl = row.querySelector('[data-tf-comment]');
+                const comment = commentEl ? commentEl.value.trim() : '';
+                if (text) {
+                    const item = { text, correct };
+                    if (comment) item.comment = comment;
+                    items.push(item);
+                }
+            });
+            if (items.length === 0) {
+                alert('Добавьте хотя бы одно утверждение');
+                return null;
+            }
+            payload.items = items;
+        }
+
+        if (type === 'gap_fill') {
+            const text = document.getElementById('gapText').value.trim();
+            const answersRaw = document.getElementById('gapAnswers').value.trim();
+            if (!text) {
+                alert('Введите текст с пропусками');
+                return null;
+            }
+            payload.text_with_gaps = text;
+            payload.answers = answersRaw.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        if (type === 'order') {
+            const events = [];
+            document.querySelectorAll('#orderItems [data-order-text]').forEach(input => {
+                const v = input.value.trim();
+                if (v) events.push(v);
+            });
+            if (events.length < 2) {
+                alert('Добавьте минимум 2 пункта');
+                return null;
+            }
+            payload.events = events;
+            payload.correct_order = events.map((_, i) => i);
+        }
+
+        if (type === 'short_answer') {
+            const questions = [];
+            document.querySelectorAll('#saItems .mb-3').forEach(block => {
+                const q = block.querySelector('[data-sa-question]').value.trim();
+                const answersRaw = block.querySelector('[data-sa-answers]').value.trim();
+                if (q) {
+                    questions.push({
+                        question: q,
+                        answers: answersRaw.split(',').map(s => s.trim()).filter(Boolean)
+                    });
+                }
+            });
+            if (questions.length === 0) {
+                alert('Добавьте хотя бы один вопрос');
+                return null;
+            }
+            payload.questions = questions;
+        }
+
+        if (type === 'multiple_choice') {
+            const options = [];
+            document.querySelectorAll('#mcOptions [data-mc-option]').forEach(input => {
+                const v = input.value.trim();
+                if (v) options.push(v);
+            });
+            if (options.length < 2) {
+                alert('Добавьте минимум 2 варианта');
+                return null;
+            }
+            payload.options = options;
+            payload.correct = parseInt(document.getElementById('mcCorrect').value, 10) || 0;
+        }
+
+        return payload;
+    },
+
+    async submit(event) {
+        event.preventDefault();
+
+        const payload = this.collectPayload();
+        if (!payload) return false;
+
+        const msg = document.getElementById('formMessage');
+        msg.innerHTML = `<div class="text-muted">Сохраняем...</div>`;
+
+        try {
+            const res = await fetch('/text-lab/api/exercises', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                msg.innerHTML = `<div class="alert alert-danger">${data.detail || 'Ошибка сохранения'}</div>`;
+                return false;
+            }
+
+            msg.innerHTML = `
+                <div class="alert alert-success">
+                    Упражнение сохранено!
+                    <a href="/text-lab/play" class="alert-link">Перейти к плееру</a>
+                </div>`;
+
+            document.getElementById('addExerciseForm').reset();
+            document.querySelectorAll('.type-fields').forEach(el => el.classList.remove('active'));
+            document.getElementById('tfItems').innerHTML = '';
+            document.getElementById('orderItems').innerHTML = '';
+            document.getElementById('saItems').innerHTML = '';
+            document.getElementById('mcOptions').innerHTML = '';
+
+        } catch (err) {
+            console.error(err);
+            msg.innerHTML = `<div class="alert alert-danger">Ошибка сети</div>`;
+        }
+
+        return false;
+    }
+};
+</script>
+{% endblock %}

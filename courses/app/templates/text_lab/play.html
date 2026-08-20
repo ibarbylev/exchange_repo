@@ -1,0 +1,1195 @@
+{% extends "base_page.html" %}
+
+{% block title %}Text Lab — {{ text_block.title }}{% endblock %}
+
+{% block container %}
+
+<style>
+    .educat-primary-header {
+        background: #86bc42 !important;
+        color: #ffffff !important;
+        padding: 12px 18px;
+        font-weight: 600;
+        border-radius: 4px 4px 0 0;
+    }
+
+    .student-stats {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+
+    .student-stats-header {
+        background: #86bc42;
+        color: #fff;
+        padding: 12px 15px;
+        font-weight: 600;
+    }
+
+    .student-stats-body {
+        padding: 12px 15px;
+    }
+
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 7px 0;
+        border-bottom: 1px solid #f1f1f1;
+    }
+
+    .file-tree {
+        background: #f8f9fa;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        max-height: 78vh;
+        overflow-y: auto;
+        font-size: 0.92rem;
+        line-height: 1.35;
+    }
+
+    .node-header {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 3px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .node-header:hover {
+        background: #e9f0ff;
+    }
+
+    .node-header.active {
+        background: #e3f2fd;
+        font-weight: 600;
+        color: #1565c0;
+    }
+
+    .classroom-main {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        min-height: 78vh;
+    }
+
+    .exercise-header {
+        background: #2d3e50 !important;
+        color: #ffffff !important;
+        padding: 18px 20px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    /* --- Аудио-плеер --- */
+    .audio-player-box {
+        background: #f4fbe8;
+        border: 1px solid #c5e1a5;
+        border-radius: 6px;
+        padding: 14px 18px;
+        margin-bottom: 20px;
+    }
+
+    .audio-player-box audio {
+        width: 100%;
+        outline: none;
+    }
+
+    /* --- Типы упражнений --- */
+    .tf-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        background: #fff;
+        transition: border-color 0.2s;
+    }
+
+    .tf-item.correct {
+        border-color: #86bc42;
+        background: #f4fbe8;
+    }
+
+    .tf-item.wrong {
+        border-color: #dc3545;
+        background: #fff0f0;
+    }
+
+    .tf-buttons button {
+        min-width: 90px;
+    }
+
+    .gap-input {
+        display: inline-block;
+        min-width: 110px;
+        border: none;
+        border-bottom: 2px dashed #86bc42;
+        background: transparent;
+        text-align: center;
+        font-size: 1.1rem;
+        margin: 0 4px;
+        padding: 2px 6px;
+        outline: none;
+    }
+
+    .gap-input.correct {
+        border-bottom-color: #2e7d32;
+        color: #2e7d32;
+        font-weight: 600;
+    }
+
+    .gap-input.wrong {
+        border-bottom-color: #dc3545;
+        color: #dc3545;
+    }
+
+    .order-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .order-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        margin-bottom: 8px;
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        cursor: grab;
+        user-select: none;
+    }
+
+    .order-item.dragging {
+        opacity: 0.5;
+        background: #e3f2fd;
+    }
+
+    .order-item .handle {
+        color: #90a4ae;
+        font-size: 1.2rem;
+    }
+
+    .order-item.order-correct {
+        border-color: #86bc42 !important;
+        background: #f4fbe8 !important;
+    }
+    .order-item.order-wrong {
+        border-color: #dc3545 !important;
+        background: #fff0f0 !important;
+    }
+
+    .order-arrows {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+    .btn-order-arrow {
+        border: none;
+        background: #f8f9fa;
+        color: #495057;
+        padding: 4px 8px;
+        font-size: 0.7rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .btn-order-arrow:hover:not(:disabled) {
+        background: #e9ecef;
+        color: #212529;
+    }
+
+    .btn-order-arrow:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+    }
+
+    .order-arrow-sep {
+        width: 1px;
+        align-self: stretch;
+        background: #ced4da;
+    }
+
+    .short-answer-input {
+        width: 100%;
+        max-width: 420px;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 1rem;
+    }
+
+    .short-answer-input.correct {
+        border-color: #86bc42;
+        background: #f4fbe8;
+    }
+
+    .short-answer-input.wrong {
+        border-color: #dc3545;
+        background: #fff0f0;
+    }
+
+    .result-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .result-badge.success {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .result-badge.fail {
+        background: #ffebee;
+        color: #c62828;
+    }
+</style>
+
+<!-- Breadcrumb -->
+<div class="breadcrumb-banner-area"
+     style="background: rgba(0,0,0,0) url('/static/img/banner/4.jpg') no-repeat scroll 0 0; background-size: cover;">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="breadcrumb-text">
+                    <h1 class="text-center">Text Lab</h1>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="section-padding">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-1 col-12 mb-30"></div>
+
+            <!-- LEFT: список упражнений -->
+            <div class="col-lg-3 col-12 mb-30">
+                <div class="student-stats">
+                    <div class="student-stats-header educat-primary-header">
+                        Текстовый блок
+                    </div>
+                    <div class="student-stats-body">
+                        <div class="stat-row">
+                            <span><i class="zmdi zmdi-collection-text"></i> {{ text_block.text_block }}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">{{ text_block.title }}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label"><i class="zmdi zmdi-headset"></i> Аудио</span>
+                            <span class="stat-value small">{{ text_block.audio or "—" }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="student-stats-header educat-primary-header d-flex justify-content-between align-items-center">
+                    <span>Упражнения</span>
+                    <a href="{{ url_for('text_lab_add', source_lang=source_lang, ui_lang=ui_lang) }}"
+                       class="btn btn-sm btn-light"
+                       style="font-size:0.75rem;"
+                    >
+                        + Добавить
+                    </a>
+                </div>
+
+                <div class="file-tree" id="exerciseList">
+                    {% if exercises %}
+                        {% for ex in exercises %}
+                        <div class="tree-node"
+                             data-exercise-id="{{ ex.id }}"
+                             onclick="TextLab.loadExercise('{{ ex.id }}')">
+                            <div class="node-header" id="nav-{{ ex.id }}">
+                                <i class="zmdi zmdi-file-text me-2 mx-1"></i>
+                                <span>{{ loop.index }}. {{ ex.title }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="p-3 text-muted text-center">
+                            Упражнений пока нет.<br>
+                            <a href="/text-lab/add">Добавить первое</a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- RIGHT: плеер -->
+            <div class="col-lg-7 col-12">
+                <div class="classroom-main" id="classroomContent">
+                    <div class="exercise-header">
+                        <h3 id="exerciseTitle">Выберите упражнение слева</h3>
+                        <h4 id="exerciseSecondTitle" class="mb-0" style="font-weight:400; opacity:0.85;"></h4>
+                        <p class="mb-0 mt-1" id="exerciseSubtitle" style="opacity:0.7; font-size:0.9rem;"></p>
+                    </div>
+
+                    <div class="p-4" id="exerciseBody">
+                        <div class="text-center py-5 text-muted">
+                            <h5>Выберите упражнение из списка слева</h5>
+                            <p class="mb-0">Все упражнения этого блока используют одно аудио.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-1 col-12 mb-30"></div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block js_scripts %}
+<script>
+'use strict';
+
+window.TextLab = {
+
+    exercises: {{ exercises | tojson }},
+    audioUrl: {{ audio_url | tojson }},
+    transcript: {{ text_block.transcript | default('', true) | tojson }},
+    currentId: null,
+
+    // --------------------------------------------------
+    // Загрузка упражнения
+    // --------------------------------------------------
+    async loadExercise(id) {
+        // Подсветка в списке
+        document.querySelectorAll('.node-header').forEach(el => el.classList.remove('active'));
+        const nav = document.getElementById('nav-' + id);
+        if (nav) nav.classList.add('active');
+
+        this.currentId = id;
+
+        const data = (this.exercises || []).find(ex => ex.id === id);
+        if (!data) {
+            document.getElementById('exerciseBody').innerHTML =
+                '<div class="alert alert-danger">Упражнение не найдено</div>';
+            return;
+        }
+        this.render(data);
+    },
+
+    // --------------------------------------------------
+    // Диспетчер рендера
+    // --------------------------------------------------
+    render(data) {
+        document.getElementById('exerciseTitle').textContent = data.title || 'Упражнение';
+        document.getElementById('exerciseSecondTitle').textContent = this.typeLabel(data.type);
+        document.getElementById('exerciseSubtitle').textContent = data.id || '';
+
+        const container = document.getElementById('exerciseBody');
+
+        // Общий блок: аудио + инструкция
+        let html = '';
+
+        if (this.audioUrl) {
+            html += `
+                <div class="audio-player-box">
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <i class="zmdi zmdi-headset" style="font-size:1.3rem; color:#86bc42;"></i>
+                        <strong>Аудио блока</strong>
+                    </div>
+                    <audio controls src="${this.audioUrl}">
+                        Ваш браузер не поддерживает аудио.
+                    </audio>
+                </div>`;
+        }
+
+        if (data.instruction) {
+            html += `
+                <div class="alert alert-light border mb-4">
+                    <strong>Задание:</strong> ${data.instruction}
+                </div>`;
+        }
+
+        // Контейнер для конкретного типа
+        html += `<div id="exerciseContent"></div>`;
+        html += `<div id="exerciseResult" class="mt-4"></div>`;
+
+        container.innerHTML = html;
+
+        const content = document.getElementById('exerciseContent');
+
+        switch (data.type) {
+            case 'multiple_choice':
+                this.renderMultipleChoice(data, content);
+                break;
+            case 'true_false':
+                this.renderTrueFalse(data, content);
+                break;
+            case 'gap_fill':
+                this.renderGapFill(data, content);
+                break;
+            case 'order':
+                this.renderOrder(data, content);
+                break;
+            case 'fix_transcript':
+                this.renderFixTranscript(data, content);
+                break;
+
+
+
+
+            case 'short_answer':
+                this.renderShortAnswer(data, content);
+                break;
+
+
+            case 'open':
+                this.renderOpen(data, content);
+                break;
+
+            default:
+                content.innerHTML = `<div class="alert alert-warning">Тип «${data.type}» пока не поддерживается</div>`;
+        }
+    },
+
+    typeLabel(type) {
+        const map = {
+            true_false: 'Верно / Неверно',
+            gap_fill: 'Заполнение пропусков',
+            order: 'Расставить по порядку',
+            multiple_choice: 'Выбор варианта',
+            matching: 'Сопоставление',
+            fix_transcript: 'Исправление транскрипта',
+            short_answer: 'Краткий ответ',
+            open: 'Открытый ответ'
+        };
+        return map[type] || type;
+    },
+
+    // --------------------------------------------------
+    // multiple_choice
+    // --------------------------------------------------
+    renderMultipleChoice(data, container) {
+        console.log('MC render, data:', data);
+
+        const questions = Array.isArray(data.questions) ? data.questions : [];
+        this._mcQuestions = questions;
+        this._mcAnswers = {};
+
+        if (questions.length === 0) {
+            container.innerHTML =
+                '<div class="alert alert-warning">Нет вопросов в data.questions. Смотрите console.log.</div>';
+            return;
+        }
+
+        let html = '';
+
+        for (let qIdx = 0; qIdx < questions.length; qIdx++) {
+            const q = questions[qIdx];
+            const options = Array.isArray(q.options) ? q.options : [];
+
+            html += '<div class="mb-4 p-3 border rounded" id="mc-q-' + qIdx + '">';
+            html += '<div class="mb-2"><strong>' + (qIdx + 1) + '. ' + (q.question || '') + '</strong></div>';
+            html += '<div class="list-group">';
+
+            for (let oIdx = 0; oIdx < options.length; oIdx++) {
+                html += '<label class="list-group-item list-group-item-action">';
+                html += '<input type="radio" name="mc-' + qIdx + '" value="' + oIdx + '" class="me-2" ';
+                html += 'onchange="TextLab._mcAnswers[' + qIdx + '] = ' + oIdx + '"> ';
+                html += options[oIdx];
+                html += '</label>';
+            }
+
+            html += '</div>';
+            html += '<div class="mc-comment small mt-2" id="mc-comment-' + qIdx + '" style="display:none;"></div>';
+            html += '</div>';
+        }
+
+        html += '<button type="button" class="btn button-in-table-green" onclick="TextLab.checkMultipleChoice()">Проверить</button>';
+
+        container.innerHTML = html;
+    },
+
+    // --------------------------------------------------
+    // checkMultipleChoice
+    // --------------------------------------------------
+
+    checkMultipleChoice() {
+        const questions = this._mcQuestions || [];
+        let correctCount = 0;
+
+        questions.forEach((q, qIdx) => {
+            const block = document.getElementById(`mc-q-${qIdx}`);
+            const commentEl = document.getElementById(`mc-comment-${qIdx}`);
+            const selected = this._mcAnswers[qIdx];
+            const isCorrect = selected === q.correct;
+
+            // Сброс подсветки
+            block.querySelectorAll('.list-group-item').forEach(el => {
+                el.classList.remove('list-group-item-success', 'list-group-item-danger');
+            });
+            if (commentEl) {
+                commentEl.style.display = 'none';
+                commentEl.textContent = '';
+            }
+
+            const labels = block.querySelectorAll('.list-group-item');
+
+            if (selected === undefined) {
+                // Не ответил — ничего не подсвечиваем
+                return;
+            }
+
+            if (isCorrect) {
+                labels[selected]?.classList.add('list-group-item-success');
+                correctCount++;
+            } else {
+                labels[selected]?.classList.add('list-group-item-danger');
+                // Показать правильный вариант
+                labels[q.correct]?.classList.add('list-group-item-success');
+                if (commentEl && q.comment) {
+                    commentEl.textContent = q.comment;
+                    commentEl.style.display = 'block';
+                    commentEl.style.color = '#c62828';
+                }
+            }
+        });
+
+        const result = document.getElementById('exerciseResult');
+        result.innerHTML = `
+            <div class="alert ${correctCount === questions.length ? 'alert-success' : 'alert-warning'}">
+                Правильно: <strong>${correctCount}</strong> из <strong>${questions.length}</strong>
+            </div>`;
+    },
+
+
+
+    // --------------------------------------------------
+    // true_false
+    // --------------------------------------------------
+    renderTrueFalse(data, container) {
+        const items = data.items || [];
+        this._tfItems = items;  // сохраняем для комментариев
+        let html = '';
+
+        items.forEach((item, idx) => {
+            html += `
+                <div class="tf-item" id="tf-item-${idx}">
+                    <div class="flex-grow-1">
+                        <div>${item.text}</div>
+                        <div class="tf-comment text-muted small mt-1" id="tf-comment-${idx}" style="display:none;"></div>
+                    </div>
+                    <div class="tf-buttons btn-group">
+                        <button class="btn btn-outline-success btn-sm"
+                                onclick="TextLab.answerTrueFalse(${idx}, true)">
+                            Верно
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm"
+                                onclick="TextLab.answerTrueFalse(${idx}, false)">
+                            Неверно
+                        </button>
+                    </div>
+                </div>`;
+        });
+
+        html += `
+            <div class="mt-4">
+                <button class="btn button-in-table-green" onclick="TextLab.checkTrueFalse()">
+                    Проверить все
+                </button>
+            </div>`;
+
+        container.innerHTML = html;
+        this._tfAnswers = {};
+    },
+
+    answerTrueFalse(idx, userAnswer) {
+        const item = (this._tfItems || [])[idx];
+        if (!item) return;
+
+        this._tfAnswers[idx] = {
+            userAnswer,
+            correct: item.correct,
+            comment: item.comment || ''
+        };
+
+        const el = document.getElementById(`tf-item-${idx}`);
+        el.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        const buttons = el.querySelectorAll('button');
+        if (userAnswer) buttons[0].classList.add('active');
+        else buttons[1].classList.add('active');
+    },
+
+    checkTrueFalse() {
+        const items = document.querySelectorAll('.tf-item');
+        let correctCount = 0;
+        const total = (this._tfItems || []).length;
+
+        items.forEach((el, idx) => {
+            const ans = this._tfAnswers[idx];
+            const commentEl = document.getElementById(`tf-comment-${idx}`);
+
+            el.classList.remove('correct', 'wrong');
+            if (commentEl) {
+                commentEl.style.display = 'none';
+                commentEl.textContent = '';
+            }
+
+            if (!ans) return;
+
+            if (ans.userAnswer === ans.correct) {
+                el.classList.add('correct');
+                correctCount++;
+            } else {
+                el.classList.add('wrong');
+                // Показываем комментарий только при ошибке
+                if (commentEl && ans.comment) {
+                    commentEl.textContent = ans.comment;
+                    commentEl.style.display = 'block';
+                    commentEl.style.color = '#c62828';
+                }
+            }
+        });
+
+        const result = document.getElementById('exerciseResult');
+        result.innerHTML = `
+            <div class="alert ${correctCount === total ? 'alert-success' : 'alert-warning'}">
+                Правильно: <strong>${correctCount}</strong> из <strong>${total}</strong>
+            </div>`;
+    },
+    // --------------------------------------------------
+    // gap_fill
+    // --------------------------------------------------
+    renderGapFill(data, container) {
+        const text = data.text_with_gaps || '';
+        const answers = data.answers || [];
+
+        let gapIndex = 0;
+        const htmlText = text.replace(/_{3,}|_____/g, () => {
+            const idx = gapIndex++;
+            return `<input type="text" class="gap-input" data-gap="${idx}" autocomplete="off">`;
+        });
+
+        container.innerHTML = `
+            <div class="p-3 border rounded mb-4" style="font-size:1.15rem; line-height:2.2;">
+                ${htmlText}
+            </div>
+            <button class="btn button-in-table-green" onclick="TextLab.checkGapFill()">
+                Проверить
+            </button>`;
+
+        this._gapAnswers = answers;
+    },
+
+    checkGapFill() {
+        const inputs = document.querySelectorAll('.gap-input');
+        let correctCount = 0;
+
+        inputs.forEach((input) => {
+            const idx = parseInt(input.dataset.gap, 10);
+            const userVal = (input.value || '').trim();
+            const correctVal = (this._gapAnswers[idx] || '').trim();
+            const userNorm = userVal.toLowerCase();
+            const correctNorm = correctVal.toLowerCase();
+
+            input.classList.remove('correct', 'wrong');
+
+            // Убираем старую подсказку, если уже проверяли
+            const oldHint = input.parentNode.querySelector(`.gap-hint[data-gap-hint="${idx}"]`);
+            if (oldHint) oldHint.remove();
+
+            if (userNorm && userNorm === correctNorm) {
+                input.classList.add('correct');
+                correctCount++;
+            } else {
+                input.classList.add('wrong');
+
+                // Зачёркиваем неправильный ввод
+                if (userVal) {
+                    input.style.textDecoration = 'line-through';
+                }
+
+                // Подставляем правильный ответ рядом
+                const hint = document.createElement('span');
+                hint.className = 'gap-hint';
+                hint.dataset.gapHint = idx;
+                hint.style.cssText = 'color:#2e7d32; font-weight:600; margin-left:6px;';
+                hint.textContent = correctVal;
+                input.after(hint);
+            }
+        });
+
+        const result = document.getElementById('exerciseResult');
+        result.innerHTML = `
+            <div class="alert ${correctCount === inputs.length ? 'alert-success' : 'alert-warning'}">
+                Правильно: <strong>${correctCount}</strong> из <strong>${inputs.length}</strong>
+            </div>`;
+    },
+
+    // --------------------------------------------------
+    // order
+    // --------------------------------------------------
+    renderOrder(data, container) {
+        const events = [...(data.events || [])];
+
+        let html = `<ul class="order-list" id="orderList">`;
+        events.forEach((ev, idx) => {
+            html += `
+                <li class="order-item" draggable="true" data-index="${idx}">
+                    <div class="order-arrows me-2">
+                        <button type="button" class="btn-order-arrow" data-dir="-1"
+                                onclick="event.stopPropagation(); TextLab.moveOrderItem(this, -1)"
+                                title="Вверх">▲</button>
+                        <span class="order-arrow-sep"></span>
+                        <button type="button" class="btn-order-arrow" data-dir="1"
+                                onclick="event.stopPropagation(); TextLab.moveOrderItem(this, 1)"
+                                title="Вниз">▼</button>
+                    </div>
+                    <span class="handle me-2">⠿</span>
+                    <span class="flex-grow-1">${ev}</span>
+                </li>`;
+        });
+        html += `</ul>`;
+        html += `
+            <button class="btn button-in-table-green mt-3" onclick="TextLab.checkOrder()">
+                Проверить порядок
+            </button>`;
+
+        container.innerHTML = html;
+        this._correctOrder = data.correct_order || [];
+        this._initDragAndDrop();
+        this._updateOrderArrowStates();
+    },
+
+    moveOrderItem(btn, direction) {
+        const item = btn.closest('.order-item');
+        const list = document.getElementById('orderList');
+        if (!item || !list || btn.disabled) return;
+
+        if (direction < 0 && item.previousElementSibling) {
+            list.insertBefore(item, item.previousElementSibling);
+        } else if (direction > 0 && item.nextElementSibling) {
+            list.insertBefore(item.nextElementSibling, item);
+        }
+        this._updateOrderArrowStates();
+    },
+
+    _updateOrderArrowStates() {
+        const items = [...document.querySelectorAll('#orderList .order-item')];
+        items.forEach((item, idx) => {
+            const upBtn = item.querySelector('.btn-order-arrow[data-dir="-1"]');
+            const downBtn = item.querySelector('.btn-order-arrow[data-dir="1"]');
+            if (upBtn) upBtn.disabled = (idx === 0);
+            if (downBtn) downBtn.disabled = (idx === items.length - 1);
+        });
+    },
+
+    _initDragAndDrop() {
+        const list = document.getElementById('orderList');
+        if (!list) return;
+
+        let dragItem = null;
+
+        list.querySelectorAll('.order-item').forEach(item => {
+            item.addEventListener('dragstart', (e) => {
+                if (e.target.closest('button')) {
+                    e.preventDefault();
+                    return;
+                }
+                dragItem = item;
+                item.classList.add('dragging');
+            });
+
+            item.addEventListener('dragend', () => {
+                item.classList.remove('dragging');
+                dragItem = null;
+                this._updateOrderArrowStates();
+            });
+
+            item.addEventListener('dragover', e => {
+                e.preventDefault();
+                if (!dragItem) return;
+                const after = this._getDragAfterElement(list, e.clientY);
+                if (after == null) {
+                    list.appendChild(dragItem);
+                } else {
+                    list.insertBefore(dragItem, after);
+                }
+            });
+        });
+    },
+
+    _getDragAfterElement(container, y) {
+        const elements = [...container.querySelectorAll('.order-item:not(.dragging)')];
+        return elements.reduce((closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset, element: child };
+            }
+            return closest;
+        }, { offset: Number.NEGATIVE_INFINITY }).element;
+    },
+
+    checkOrder() {
+        const items = [...document.querySelectorAll('#orderList .order-item')];
+        const currentOrder = items.map(el => parseInt(el.dataset.index, 10));
+        const correct = this._correctOrder || [];
+
+        let correctCount = 0;
+
+        items.forEach((el, pos) => {
+            el.classList.remove('order-correct', 'order-wrong');
+            el.style.borderColor = '';
+            el.style.background = '';
+
+            const isRightPlace = currentOrder[pos] === correct[pos];
+            if (isRightPlace) {
+                el.classList.add('order-correct');
+                el.style.borderColor = '#86bc42';
+                el.style.background = '#f4fbe8';
+                correctCount++;
+            } else {
+                el.classList.add('order-wrong');
+                el.style.borderColor = '#dc3545';
+                el.style.background = '#fff0f0';
+            }
+        });
+
+        const result = document.getElementById('exerciseResult');
+        const allCorrect = correctCount === items.length;
+
+        result.innerHTML = allCorrect
+            ? `<div class="alert alert-success"><strong>Отлично!</strong> Порядок верный.</div>`
+            : `<div class="alert alert-warning">
+                   На своих местах: <strong>${correctCount}</strong> из <strong>${items.length}</strong>.
+                   Зелёные — верно, красные — нужно переместить.
+               </div>`;
+    },
+
+
+    // --------------------------------------------------
+    // fix_transcript
+    // --------------------------------------------------
+    renderFixTranscript(data, container) {
+        const transcript = this.transcript || '';
+        const errors = data.errors || [];
+
+        if (!transcript) {
+            container.innerHTML = '<div class="alert alert-warning">Транскрипт блока не задан.</div>';
+            return;
+        }
+
+        // 1. Токенизация: слова и пунктуация отдельно, <br> сохраняем
+        const rawParts = transcript.split(/(<br\s*\/?>)/gi);
+        const tokens = []; // { type: 'word'|'punct'|'br', text, correct, wrong }
+
+        rawParts.forEach(part => {
+            if (!part) return;
+            if (/^<br\s*\/?>$/i.test(part)) {
+                tokens.push({ type: 'br', text: part });
+                return;
+            }
+            // слова / пунктуация / пробелы
+            const chunks = part.split(/(\s+|[–—\-.,!?;:«»"'( )])/);
+            chunks.forEach(ch => {
+                if (!ch) return;
+                if (/^\s+$/.test(ch)) {
+                    tokens.push({ type: 'space', text: ch });
+                } else if (/^[–—\-.,!?;:«»"'( )]+$/.test(ch)) {
+                    tokens.push({ type: 'punct', text: ch });
+                } else {
+                    tokens.push({
+                        type: 'word',
+                        text: ch,       // что показываем сейчас
+                        correct: ch,    // правильное слово из транскрипта
+                        isError: false
+                    });
+                }
+            });
+        });
+
+        // 2. Применяем ошибки: word + n-е вхождение
+        const occurrence = {};
+        tokens.forEach(tok => {
+            if (tok.type !== 'word') return;
+            const key = tok.correct;
+            occurrence[key] = (occurrence[key] || 0) + 1;
+            const n = occurrence[key];
+
+            const err = errors.find(e => e.word === key && e.n === n);
+            if (err) {
+                tok.text = err.wrong;
+                tok.isError = true;
+            }
+        });
+
+        this._fixTokens = tokens;
+
+        // 3. Рендер
+        let html = '<div id="fixTranscript" class="p-3 border rounded mb-3" style="font-size:1.1rem; line-height:2.1;">';
+
+        tokens.forEach((tok, idx) => {
+            if (tok.type === 'br') {
+                html += '<br>';
+            } else if (tok.type === 'space' || tok.type === 'punct') {
+                html += tok.text;
+            } else {
+                html += '<span class="fix-word" data-idx="' + idx + '" ' +
+                        'style="cursor:pointer; border-bottom:1px dashed #86bc42; padding:0 1px;">' +
+                        tok.text +
+                        '</span>';
+            }
+        });
+
+        html += '</div>';
+        html += '<button type="button" class="btn button-in-table-green" onclick="TextLab.checkFixTranscript()">Проверить</button>';
+
+        container.innerHTML = html;
+
+        // 4. Клик по слову → поле ввода
+        container.querySelectorAll('.fix-word').forEach(el => {
+            el.addEventListener('click', function () {
+                if (this.querySelector('input')) return;
+
+                const idx = parseInt(this.dataset.idx, 10);
+                const current = this.textContent;
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = current;
+                input.className = 'fix-input';
+                input.dataset.idx = idx;
+                input.style.cssText = 'width:' + Math.max(60, current.length * 12) + 'px; font-size:1.05rem; text-align:center; border:2px solid #86bc42; border-radius:4px; padding:2px 4px;';
+
+                this.textContent = '';
+                this.appendChild(input);
+                input.focus();
+                input.select();
+
+                input.addEventListener('click', function (e) { e.stopPropagation(); });
+                input.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.blur();
+                    }
+                });
+            });
+        });
+    },
+
+    checkFixTranscript() {
+        const tokens = this._fixTokens || [];
+        let foundErrors = 0;
+        let fixedOk = 0;
+        let totalErrors = tokens.filter(t => t.isError).length;
+
+        tokens.forEach((tok, idx) => {
+            if (tok.type !== 'word') return;
+
+            const el = document.querySelector('.fix-word[data-idx="' + idx + '"]');
+            if (!el) return;
+
+            const input = el.querySelector('input');
+            const userVal = (input ? input.value : el.textContent).trim();
+            const correctVal = tok.correct;
+
+            el.style.background = '';
+            el.style.borderBottomColor = '#86bc42';
+
+            // Убираем старые подсказки
+            const oldHint = el.parentNode.querySelector('.fix-hint[data-hint="' + idx + '"]');
+            if (oldHint) oldHint.remove();
+
+            if (tok.isError) {
+                foundErrors++;
+                const ok = userVal.toLowerCase() === correctVal.toLowerCase();
+                if (ok) {
+                    fixedOk++;
+                    el.style.background = '#f4fbe8';
+                    el.style.borderBottomColor = '#86bc42';
+                    if (input) {
+                        input.value = correctVal;
+                        input.style.borderColor = '#86bc42';
+                        input.style.textDecoration = '';
+                    } else {
+                        el.textContent = correctVal;
+                    }
+                } else {
+                    el.style.background = '#fff0f0';
+                    el.style.borderBottomColor = '#dc3545';
+                    if (input) {
+                        input.style.borderColor = '#dc3545';
+                        input.style.textDecoration = 'line-through';
+                    }
+                    // подсказка
+                    const hint = document.createElement('span');
+                    hint.className = 'fix-hint';
+                    hint.dataset.hint = idx;
+                    hint.style.cssText = 'color:#2e7d32; font-weight:600; margin:0 4px;';
+                    hint.textContent = ' → ' + correctVal;
+                    el.after(hint);
+                }
+            } else {
+                // Ложная правка верного слова
+                if (userVal.toLowerCase() !== correctVal.toLowerCase()) {
+                    el.style.background = '#fff8e1';
+                    el.style.borderBottomColor = '#f9a825';
+                }
+            }
+        });
+
+        const result = document.getElementById('exerciseResult');
+        const allOk = fixedOk === totalErrors;
+        result.innerHTML =
+            '<div class="alert ' + (allOk ? 'alert-success' : 'alert-warning') + '">' +
+            'Исправлено верно: <strong>' + fixedOk + '</strong> из <strong>' + totalErrors + '</strong>' +
+            '</div>';
+    },
+
+
+
+
+
+
+
+
+
+
+    // --------------------------------------------------
+    // short_answer
+    // --------------------------------------------------
+    renderShortAnswer(data, container) {
+        const questions = data.questions || [];
+        let html = '';
+
+        questions.forEach((q, idx) => {
+            html += `
+                <div class="mb-4">
+                    <div class="mb-2"><strong>${idx + 1}. ${q.question}</strong></div>
+                    <input type="text"
+                           class="short-answer-input"
+                           id="sa-${idx}"
+                           data-answers='${JSON.stringify(q.answers || [])}'
+                           placeholder="Ваш ответ..."
+                           autocomplete="off">
+                </div>`;
+        });
+
+        html += `
+            <button class="btn button-in-table-green" onclick="TextLab.checkShortAnswer()">
+                Проверить
+            </button>`;
+
+        container.innerHTML = html;
+    },
+
+    checkShortAnswer() {
+        const inputs = document.querySelectorAll('.short-answer-input');
+        let correctCount = 0;
+
+        inputs.forEach(input => {
+            const userVal = (input.value || '').trim().toLowerCase();
+            const answers = JSON.parse(input.dataset.answers || '[]')
+                               .map(a => String(a).trim().toLowerCase())
+                               .filter(Boolean);
+
+            input.classList.remove('correct', 'wrong');
+            input.style.textDecoration = '';
+
+            // Убираем старую подсказку
+            const oldHint = input.parentNode.querySelector('.sa-hint');
+            if (oldHint) oldHint.remove();
+
+            const isCorrect = userVal && answers.includes(userVal);
+
+            if (isCorrect) {
+                input.classList.add('correct');
+                correctCount++;
+            } else {
+                input.classList.add('wrong');
+                if (userVal) {
+                    input.style.textDecoration = 'line-through';
+                }
+
+                // Показываем все допустимые ответы
+                const hint = document.createElement('div');
+                hint.className = 'sa-hint small mt-1';
+                hint.style.color = '#2e7d32';
+                hint.style.fontWeight = '600';
+                hint.textContent = 'Правильно: ' + (answers.join(' / ') || '—');
+                input.after(hint);
+            }
+        });
+
+        const result = document.getElementById('exerciseResult');
+        result.innerHTML = `
+            <div class="alert ${correctCount === inputs.length ? 'alert-success' : 'alert-warning'}">
+                Правильно: <strong>${correctCount}</strong> из <strong>${inputs.length}</strong>
+            </div>`;
+    },
+
+
+    // --------------------------------------------------
+    // open
+    // --------------------------------------------------
+    renderOpen(data, container) {
+        container.innerHTML = `
+            <div class="mb-3">
+                <textarea class="form-control" rows="6"
+                          placeholder="Напишите свой ответ здесь..."
+                          id="openAnswer"></textarea>
+            </div>
+            <button class="btn button-in-table-green" onclick="TextLab.saveOpenAnswer()">
+                Сохранить ответ
+            </button>`;
+    },
+
+    saveOpenAnswer() {
+        const text = document.getElementById('openAnswer')?.value || '';
+        const result = document.getElementById('exerciseResult');
+        if (!text.trim()) {
+            result.innerHTML = `<div class="alert alert-warning">Ответ пустой</div>`;
+            return;
+        }
+        result.innerHTML = `
+            <div class="alert alert-success">
+                Ответ сохранён (в лаборатории пока только локально).<br>
+                <small class="text-muted">${text.substring(0, 120)}${text.length > 120 ? '…' : ''}</small>
+            </div>`;
+    },
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (TextLab.exercises && TextLab.exercises.length > 0) {
+        // TextLab.loadExercise(TextLab.exercises[0].id);
+    }
+});
+</script>
+{% endblock %}
