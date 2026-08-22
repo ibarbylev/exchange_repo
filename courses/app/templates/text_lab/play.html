@@ -453,6 +453,9 @@ window.TextLab = {
             case 'grammar_extract':
                 this.renderGrammarExtract(data, content);
                 break;
+            case 'synonym_replace':
+                this.renderSynonymReplace(data, content);
+                break;
 
 
 
@@ -480,6 +483,7 @@ window.TextLab = {
             fix_transcript: 'Исправление транскрипта',
             short_answer: 'Краткий ответ',
             grammar_extract: 'Грамматические конструкции',
+            synonym_replace: 'Синонимы',
             open: 'Открытый ответ'
         };
         return map[type] || type;
@@ -1066,8 +1070,120 @@ window.TextLab = {
             '</div>';
     },
 
+    // --------------------------------------------------
+    // synonym_replace  (замена выделенных слов синонимами)
+    // --------------------------------------------------
 
+    renderSynonymReplace(data, container) {
+        const transcript = this.transcript || '';
+        const items = data.items || [];
 
+        if (!transcript) {
+            container.innerHTML = '<div class="alert alert-warning">Транскрипт блока не задан.</div>';
+            return;
+        }
+
+        const rawParts = transcript.split(/(<br\s*\/?>)/gi);
+        const tokens = [];
+
+        rawParts.forEach(part => {
+            if (!part) return;
+            if (/^<br\s*\/?>$/i.test(part)) {
+                tokens.push({ type: 'br' });
+                return;
+            }
+            const chunks = part.split(/(\s+|[–—.,!?;:«»"'()])/);
+            chunks.forEach(ch => {
+                if (!ch) return;
+                if (/^\s+$/.test(ch)) tokens.push({ type: 'space', text: ch });
+                else if (/^[–—.,!?;:«»"'()]+$/.test(ch)) tokens.push({ type: 'punct', text: ch });
+                else tokens.push({ type: 'word', text: ch, target: false, answers: [] });
+            });
+        });
+
+        const occurrence = {};
+        tokens.forEach(tok => {
+            if (tok.type !== 'word') return;
+            const key = tok.text;
+            occurrence[key] = (occurrence[key] || 0) + 1;
+            const hit = items.find(it => it.word === key && it.n === occurrence[key]);
+            if (hit) {
+                tok.target = true;
+                tok.answers = hit.answers || [];
+            }
+        });
+
+        this._synTokens = tokens;
+
+        let html = '<div id="synonymText" class="p-3 border rounded mb-3" style="font-size:1.1rem; line-height:2.1;">';
+        tokens.forEach((tok, idx) => {
+            if (tok.type === 'br') {
+                html += '<br>';
+            } else if (tok.type === 'space' || tok.type === 'punct') {
+                html += tok.text;
+            } else if (tok.target) {
+                html +=
+                    '<input type="text" class="syn-input" data-idx="' + idx + '" ' +
+                    'placeholder="' + tok.text + '" title="Было: ' + tok.text + '" ' +
+                    'style="min-width:90px; width:' + Math.max(90, tok.text.length * 12) +
+                    'px; border:none; border-bottom:2px dashed #86bc42; text-align:center; background:#f4fbe8;">';
+            } else {
+                html += tok.text;
+            }
+        });
+        html += '</div>';
+        html += '<button type="button" class="btn button-in-table-green" onclick="TextLab.checkSynonymReplace()">Проверить</button>';
+        container.innerHTML = html;
+    },
+
+    checkSynonymReplace() {
+        const tokens = this._synTokens || [];
+        const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        let ok = 0;
+        let total = 0;
+
+        tokens.forEach((tok, idx) => {
+            if (!tok.target) return;
+            total++;
+
+            const input = document.querySelector('.syn-input[data-idx="' + idx + '"]');
+            if (!input) return;
+
+            const oldHint = input.parentNode.querySelector('.syn-hint[data-hint="' + idx + '"]');
+            if (oldHint) oldHint.remove();
+
+            const userVal = norm(input.value);
+            const answers = (tok.answers || []).map(norm).filter(Boolean);
+            const isCorrect = userVal && answers.includes(userVal);
+
+            input.classList.remove('correct', 'wrong');
+            input.style.textDecoration = '';
+
+            if (isCorrect) {
+                input.classList.add('correct');
+                input.style.borderBottomColor = '#2e7d32';
+                input.style.background = '#f4fbe8';
+                ok++;
+            } else {
+                input.classList.add('wrong');
+                input.style.borderBottomColor = '#dc3545';
+                input.style.background = '#fff0f0';
+                if (userVal) input.style.textDecoration = 'line-through';
+
+                const hint = document.createElement('span');
+                hint.className = 'syn-hint';
+                hint.dataset.hint = idx;
+                hint.style.cssText = 'color:#2e7d32; font-weight:600; margin:0 4px;';
+                hint.textContent = ' → ' + answers.join(' / ');
+                input.after(hint);
+            }
+        });
+
+        const result = document.getElementById('exerciseResult');
+        result.innerHTML =
+            '<div class="alert ' + (ok === total ? 'alert-success' : 'alert-warning') + '">' +
+            'Верно: <strong>' + ok + '</strong> из <strong>' + total + '</strong></div>';
+    },
 
 
 
