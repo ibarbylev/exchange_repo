@@ -450,7 +450,9 @@ window.TextLab = {
             case 'info_extract':
                 this.renderInfoExtract(data, content);
                 break;
-
+            case 'grammar_extract':
+                this.renderGrammarExtract(data, content);
+                break;
 
 
 
@@ -477,6 +479,7 @@ window.TextLab = {
             matching: 'Сопоставление',
             fix_transcript: 'Исправление транскрипта',
             short_answer: 'Краткий ответ',
+            grammar_extract: 'Грамматические конструкции',
             open: 'Открытый ответ'
         };
         return map[type] || type;
@@ -1073,7 +1076,7 @@ window.TextLab = {
 
 
     // --------------------------------------------------
-    // short_answer; renderInfoExtract
+    // short_answer; renderInfoExtract; renderGrammarExtract
     // --------------------------------------------------
     renderShortAnswer(data, container) {
         const questions = data.questions || [];
@@ -1104,16 +1107,17 @@ window.TextLab = {
         const inputs = document.querySelectorAll('.short-answer-input');
         let correctCount = 0;
 
+        const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
         inputs.forEach(input => {
-            const userVal = (input.value || '').trim().toLowerCase();
+            const userVal = norm(input.value);
             const answers = JSON.parse(input.dataset.answers || '[]')
-                               .map(a => String(a).trim().toLowerCase())
+                               .map(norm)
                                .filter(Boolean);
 
             input.classList.remove('correct', 'wrong');
             input.style.textDecoration = '';
 
-            // Убираем старую подсказку
             const oldHint = input.parentNode.querySelector('.sa-hint');
             if (oldHint) oldHint.remove();
 
@@ -1124,11 +1128,10 @@ window.TextLab = {
                 correctCount++;
             } else {
                 input.classList.add('wrong');
-                if (userVal) {
+                if (input.value.trim()) {
                     input.style.textDecoration = 'line-through';
                 }
 
-                // Показываем все допустимые ответы
                 const hint = document.createElement('div');
                 hint.className = 'sa-hint small mt-1';
                 hint.style.color = '#2e7d32';
@@ -1144,6 +1147,7 @@ window.TextLab = {
                 Правильно: <strong>${correctCount}</strong> из <strong>${inputs.length}</strong>
             </div>`;
     },
+
 
     renderInfoExtract(data, container) {
         const questions = data.questions || [];
@@ -1168,6 +1172,29 @@ window.TextLab = {
                   '<input type="text" class="short-answer-input" id="sa-' + idx + '" ' +
                          "data-answers='" + JSON.stringify(q.answers || []) + "' " +
                          'placeholder="Запишите то, что услышали..." autocomplete="off">' +
+                '</div>';
+        });
+
+        html += '<button type="button" class="btn button-in-table-green" onclick="TextLab.checkShortAnswer()">Проверить</button>';
+        container.innerHTML = html;
+    },
+
+
+    renderGrammarExtract(data, container) {
+        const questions = data.questions || [];
+
+        let html = '';
+        questions.forEach((q, idx) => {
+            const tag = q.construction || 'конструкция';
+            html +=
+                '<div class="mb-4">' +
+                  '<div class="mb-2">' +
+                    '<span class="badge bg-success me-2">' + tag + '</span>' +
+                    '<strong>' + (idx + 1) + '. ' + (q.question || '') + '</strong>' +
+                  '</div>' +
+                  '<input type="text" class="short-answer-input" id="sa-' + idx + '" ' +
+                         "data-answers='" + JSON.stringify(q.answers || []) + "' " +
+                         'placeholder="Выпишите пример из аудио..." autocomplete="off">' +
                 '</div>';
         });
 
