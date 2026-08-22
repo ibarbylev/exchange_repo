@@ -444,6 +444,12 @@ window.TextLab = {
             case 'fix_transcript':
                 this.renderFixTranscript(data, content);
                 break;
+            case 'short_answer':
+                this.renderShortAnswer(data, content);
+                break;
+            case 'info_extract':
+                this.renderInfoExtract(data, content);
+                break;
 
 
 
@@ -1067,7 +1073,7 @@ window.TextLab = {
 
 
     // --------------------------------------------------
-    // short_answer
+    // short_answer; renderInfoExtract
     // --------------------------------------------------
     renderShortAnswer(data, container) {
         const questions = data.questions || [];
@@ -1137,6 +1143,36 @@ window.TextLab = {
             <div class="alert ${correctCount === inputs.length ? 'alert-success' : 'alert-warning'}">
                 Правильно: <strong>${correctCount}</strong> из <strong>${inputs.length}</strong>
             </div>`;
+    },
+
+    renderInfoExtract(data, container) {
+        const questions = data.questions || [];
+        const kindLabel = {
+            name: 'имя',
+            place: 'место',
+            number: 'цифра',
+            date: 'дата',
+            other: 'факт'
+        };
+
+        let html = '';
+        questions.forEach((q, idx) => {
+            const kind = q.kind || 'other';
+            const badge = kindLabel[kind] || kind;
+            html +=
+                '<div class="mb-4">' +
+                  '<div class="mb-2">' +
+                    '<span class="badge bg-secondary me-2">' + badge + '</span>' +
+                    '<strong>' + (idx + 1) + '. ' + (q.question || '') + '</strong>' +
+                  '</div>' +
+                  '<input type="text" class="short-answer-input" id="sa-' + idx + '" ' +
+                         "data-answers='" + JSON.stringify(q.answers || []) + "' " +
+                         'placeholder="Запишите то, что услышали..." autocomplete="off">' +
+                '</div>';
+        });
+
+        html += '<button type="button" class="btn button-in-table-green" onclick="TextLab.checkShortAnswer()">Проверить</button>';
+        container.innerHTML = html;
     },
 
 
