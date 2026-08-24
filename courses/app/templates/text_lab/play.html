@@ -1359,7 +1359,6 @@ window.TextLab = {
                   '<input type="text" class="short-answer-input" id="sa-' + idx + '" ' +
                          "data-answers='" + JSON.stringify(q.answers || []) + "' " +
                          'placeholder="Запишите то, что услышали..." autocomplete="off">' +
-                         "data-construction='" + (q.construction || '').replace(/'/g, "&#39;") + "' " +
                 '</div>';
         });
 
@@ -1383,6 +1382,7 @@ window.TextLab = {
                   '<input type="text" class="short-answer-input" id="sa-' + idx + '" ' +
                          "data-answers='" + JSON.stringify(q.answers || []) + "' " +
                          'placeholder="Выпишите пример из аудио..." autocomplete="off">' +
+                         "data-construction='" + (q.construction || '').replace(/'/g, "&#39;") + "' " +
                 '</div>';
         });
 
