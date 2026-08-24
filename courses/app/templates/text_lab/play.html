@@ -97,6 +97,23 @@
         outline: none;
     }
 
+    .audio-speed-control {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 10px;
+    }
+
+    .audio-speed-control select {
+        height: 38px;
+        padding: 0 10px;
+        border: none;
+        border-radius: 4px;
+        background: #2d3e50;
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
     /* --- Типы упражнений --- */
     .tf-item {
         display: flex;
@@ -367,6 +384,10 @@ window.TextLab = {
     transcript: {{ text_block.transcript | default('', true) | tojson }},
     currentId: null,
 
+    setAudioSpeed(value) {
+        const audio = document.getElementById('textLabAudio');
+        if (audio) audio.playbackRate = Number(value);
+    },
     // --------------------------------------------------
     // Загрузка упражнения
     // --------------------------------------------------
@@ -407,9 +428,30 @@ window.TextLab = {
                         <i class="zmdi zmdi-headset" style="font-size:1.3rem; color:#86bc42;"></i>
                         <strong>Аудио блока</strong>
                     </div>
-                    <audio controls src="${this.audioUrl}">
-                        Ваш браузер не поддерживает аудио.
-                    </audio>
+
+                    <div class="d-flex align-items-center">
+                        <audio id="textLabAudio" controls src="${this.audioUrl}">
+                            Ваш браузер не поддерживает аудио.
+                        </audio>
+
+                        <div class="audio-speed-control">
+                            <select onchange="TextLab.setAudioSpeed(this.value)"
+                                    aria-label="Скорость воспроизведения">
+                                <option value="0.25">0,25×</option>
+                                <option value="0.5">0,5×</option>
+                                <option value="0.75">0,75×</option>
+                                <option value="1" selected>1×</option>
+                                <option value="1.25">1,25×</option>
+                                <option value="1.5">1,5×</option>
+                                <option value="1.75">1,75×</option>
+                                <option value="2">2×</option>
+                                <option value="2.25">2,25×</option>
+                                <option value="2.5">2,5×</option>
+                                <option value="2.75">2,75×</option>
+                                <option value="3">3×</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>`;
         }
 
@@ -456,11 +498,11 @@ window.TextLab = {
             case 'synonym_replace':
                 this.renderSynonymReplace(data, content);
                 break;
-
-
-
             case 'short_answer':
                 this.renderShortAnswer(data, content);
+                break;
+            case 'summary':
+                this.renderSummary(data, content);
                 break;
 
 
@@ -484,6 +526,7 @@ window.TextLab = {
             info_extract: 'Поиск информации',
             grammar_extract: 'Грамматические конструкции',
             synonym_replace: 'Синонимы',
+            summary: 'Резюме / эссе',
             open: 'Открытый ответ'
         };
         return map[type] || type;
@@ -1218,7 +1261,35 @@ window.TextLab = {
         const inputs = document.querySelectorAll('.short-answer-input');
         let correctCount = 0;
 
-        const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const MIN_LEN = 9;
+
+        const norm = (s) => String(s || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[.,!?;:—–\-«»"'()]/g, ' ')
+            .replace(/\s+/g, ' ');
+
+        const isAnswerCorrect = (userVal, answers, construction = '') => {
+            if (!userVal || userVal.length < MIN_LEN) return false;
+
+            const constrNorm = norm(construction);
+
+            // Запрещаем ответ, который является самой конструкцией (или почти ею)
+            if (constrNorm && (userVal === constrNorm || constrNorm.includes(userVal) || userVal === constrNorm + ' че' || userVal === constrNorm + ' че ')) {
+                return false;
+            }
+
+            // Также запрещаем, если ответ слишком короткий относительно конструкции
+            if (constrNorm && userVal.length <= constrNorm.length + 2) {
+                return false;
+            }
+
+            return answers.some(correct => {
+                if (correct.includes(userVal)) return true;
+                if (userVal.includes(correct) && correct.length >= MIN_LEN) return true;
+                return false;
+            });
+        };
 
         inputs.forEach(input => {
             const userVal = norm(input.value);
@@ -1226,13 +1297,16 @@ window.TextLab = {
                                .map(norm)
                                .filter(Boolean);
 
+            // Берём конструкцию, если она есть (для grammar_extract)
+            const construction = input.dataset.construction || '';
+
             input.classList.remove('correct', 'wrong');
             input.style.textDecoration = '';
 
             const oldHint = input.parentNode.querySelector('.sa-hint');
             if (oldHint) oldHint.remove();
 
-            const isCorrect = userVal && answers.includes(userVal);
+            const isCorrect = isAnswerCorrect(userVal, answers, construction);
 
             if (isCorrect) {
                 input.classList.add('correct');
@@ -1245,12 +1319,14 @@ window.TextLab = {
 
                 const hint = document.createElement('div');
                 hint.className = 'sa-hint small mt-1';
-                hint.style.color = '#2e7d32';
-                hint.style.fontWeight = '600';
-                hint.textContent = 'Правильно: ' + (answers.join(' / ') || '—');
-                input.after(hint);
+                hint.style.color = '#c62828';
+                hint.textContent = 'Правилно: ' + (answers.join(' / ') || '—');
+                input.parentNode.appendChild(hint);
             }
         });
+
+
+
 
         const result = document.getElementById('exerciseResult');
         result.innerHTML = `
@@ -1283,6 +1359,7 @@ window.TextLab = {
                   '<input type="text" class="short-answer-input" id="sa-' + idx + '" ' +
                          "data-answers='" + JSON.stringify(q.answers || []) + "' " +
                          'placeholder="Запишите то, что услышали..." autocomplete="off">' +
+                         "data-construction='" + (q.construction || '').replace(/'/g, "&#39;") + "' " +
                 '</div>';
         });
 
@@ -1314,6 +1391,75 @@ window.TextLab = {
     },
 
 
+    // --------------------------------------------------
+    // summary (пока только UI + лимит символов)
+    // --------------------------------------------------
+    renderSummary(data, container) {
+        const minC = data.min_chars || 120;
+        const maxC = data.max_chars || 600;
+        const hints = data.hints || [];
+        const template = data.template || '';
+
+        let html = '';
+        if (hints.length) {
+            html += '<div class="alert alert-light border mb-3"><strong>Что желательно упомянуть:</strong><ul class="mb-0 mt-2">';
+            hints.forEach(h => { html += '<li>' + h + '</li>'; });
+            html += '</ul></div>';
+        }
+
+        html +=
+            '<div class="mb-2 d-flex justify-content-between align-items-center">' +
+              '<span class="text-muted small">Объём: <span id="summaryCount">0</span> / ' + maxC +
+              ' (минимум ' + minC + ')</span>' +
+              '<span id="summaryStatus" class="small"></span>' +
+            '</div>' +
+            '<textarea id="summaryInput" class="form-control" rows="10" ' +
+              'placeholder="Напишите резюме здесь...">' + template + '</textarea>' +
+            '<div class="mt-3">' +
+              '<button type="button" id="summarySubmitBtn" class="btn button-in-table-green" disabled>' +
+                'Отправить (пока без сохранения)' +
+              '</button>' +
+            '</div>';
+
+        container.innerHTML = html;
+
+        const ta = document.getElementById('summaryInput');
+        const counter = document.getElementById('summaryCount');
+        const status = document.getElementById('summaryStatus');
+        const btn = document.getElementById('summarySubmitBtn');
+
+        const update = () => {
+            let val = ta.value;
+            if (val.length > maxC) {
+                ta.value = val.slice(0, maxC);
+                val = ta.value;
+                status.innerHTML = '<span class="text-danger">Достигнут максимум (' + maxC + ')</span>';
+            } else if (val.length < minC) {
+                status.innerHTML = '<span class="text-warning">Ещё минимум ' + (minC - val.length) + ' символов</span>';
+            } else {
+                status.innerHTML = '<span class="text-success">Можно отправлять</span>';
+            }
+            counter.textContent = val.length;
+            btn.disabled = val.length < minC || val.length > maxC;
+        };
+
+        ta.addEventListener('input', update);
+        update();
+
+        btn.addEventListener('click', () => {
+            const result = document.getElementById('exerciseResult');
+            result.innerHTML =
+                '<div class="alert alert-info">' +
+                'Текст принят локально (сохранение и отправка преподавателю будут в блоке teacher).' +
+                '<br><small>Символов: ' + ta.value.length + '</small></div>';
+        });
+    },
+
+
+
+
+
+
 
     // --------------------------------------------------
     // open
@@ -1343,17 +1489,6 @@ window.TextLab = {
                 <small class="text-muted">${text.substring(0, 120)}${text.length > 120 ? '…' : ''}</small>
             </div>`;
     },
-
-
-
-
-
-
-
-
-
-
-
 
 
 
