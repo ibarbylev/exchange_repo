@@ -1261,8 +1261,6 @@ window.TextLab = {
         const inputs = document.querySelectorAll('.short-answer-input');
         let correctCount = 0;
 
-        const MIN_LEN = 9;
-
         const norm = (s) => String(s || '')
             .trim()
             .toLowerCase()
@@ -1270,23 +1268,31 @@ window.TextLab = {
             .replace(/\s+/g, ' ');
 
         const isAnswerCorrect = (userVal, answers, construction = '') => {
-            if (!userVal || userVal.length < MIN_LEN) return false;
+            if (!userVal) return false;
 
             const constrNorm = norm(construction);
 
-            // Запрещаем ответ, который является самой конструкцией (или почти ею)
-            if (constrNorm && (userVal === constrNorm || constrNorm.includes(userVal) || userVal === constrNorm + ' че' || userVal === constrNorm + ' че ')) {
-                return false;
+            // точное совпадение всегда принимаем (в том числе «3», «2», «чай»)
+            if (answers.includes(userVal)) return true;
+
+            // --- только для grammar_extract ---
+            if (constrNorm) {
+                // запрещаем голую конструкцию
+                if (userVal === constrNorm || constrNorm.includes(userVal)) {
+                    return false;
+                }
+                // ответ должен быть заметно длиннее самой конструкции
+                if (userVal.length < constrNorm.length + 5) {
+                    return false;
+                }
             }
 
-            // Также запрещаем, если ответ слишком короткий относительно конструкции
-            if (constrNorm && userVal.length <= constrNorm.length + 2) {
-                return false;
-            }
+            // частичное совпадение — только для более длинных фраз
+            if (userVal.length < 4) return false;
 
             return answers.some(correct => {
                 if (correct.includes(userVal)) return true;
-                if (userVal.includes(correct) && correct.length >= MIN_LEN) return true;
+                if (userVal.includes(correct) && correct.length >= 4) return true;
                 return false;
             });
         };
@@ -1297,7 +1303,6 @@ window.TextLab = {
                                .map(norm)
                                .filter(Boolean);
 
-            // Берём конструкцию, если она есть (для grammar_extract)
             const construction = input.dataset.construction || '';
 
             input.classList.remove('correct', 'wrong');
@@ -1325,16 +1330,14 @@ window.TextLab = {
             }
         });
 
-
-
-
         const result = document.getElementById('exerciseResult');
-        result.innerHTML = `
-            <div class="alert ${correctCount === inputs.length ? 'alert-success' : 'alert-warning'}">
-                Правильно: <strong>${correctCount}</strong> из <strong>${inputs.length}</strong>
-            </div>`;
+        if (result) {
+            result.innerHTML = `
+                <div class="alert ${correctCount === inputs.length ? 'alert-success' : 'alert-warning'}">
+                    Правильно: <strong>${correctCount}</strong> из <strong>${inputs.length}</strong>
+                </div>`;
+        }
     },
-
 
     renderInfoExtract(data, container) {
         const questions = data.questions || [];
@@ -1375,14 +1378,14 @@ window.TextLab = {
             const tag = q.construction || 'конструкция';
             html +=
                 '<div class="mb-4">' +
-                  '<div class="mb-2">' +
+                    '<div class="mb-2">' +
                     '<span class="badge bg-success me-2">' + tag + '</span>' +
                     '<strong>' + (idx + 1) + '. ' + (q.question || '') + '</strong>' +
-                  '</div>' +
-                  '<input type="text" class="short-answer-input" id="sa-' + idx + '" ' +
-                         "data-answers='" + JSON.stringify(q.answers || []) + "' " +
-                         "data-construction='" + (q.construction || '').replace(/'/g, "&#39;") + "' " +
-                         'placeholder="Выпишите пример из аудио..." autocomplete="off">' +
+                    '</div>' +
+                    '<input type="text" class="short-answer-input" id="sa-' + idx + '" ' +
+                           "data-answers='" + JSON.stringify(q.answers || []) + "' " +
+                           "data-construction='" + (q.construction || '').replace(/'/g, "&#39;") + "' " +
+                           'placeholder="Изпишете пример от аудиото..." autocomplete="off">' +
                 '</div>';
         });
 
