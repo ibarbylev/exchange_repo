@@ -1,5 +1,12 @@
 import asyncpg
 
+from collections import defaultdict
+
+
+BLOCK_LABEL = {
+    "X": "Text Intensive",
+    "C": "Coach Online",
+}
 
 async def get_theme_exercise_counts(conn, theme_name: str) -> dict:
     """
@@ -47,13 +54,57 @@ async def get_theme_exercise_counts(conn, theme_name: str) -> dict:
     return filtered
 
 
+def _intensive_lesson_node(block: dict) -> dict:
+    """Только отображение в дереве. Без клика и без плеера."""
+    block_type = (block.get("block_type") or "X").upper()
+    extra = ["intensive-block", f"intensive-{block_type.lower()}"]
+    if block_type == "C":
+        icon = "zmdi zmdi-account-box text-info"
+    else:
+        icon = "zmdi zmdi-collection-text text-primary"
+
+    title = block.get("title") or block.get("name")
+    label = BLOCK_LABEL.get(block_type, "Intensive")
+
+    return {
+        "name": block["name"],
+        "title": f"{label}: {title}",
+        "kind": "intensive",
+        "block_type": block_type,
+        "after_lesson": block.get("after_lesson"),
+        "open_class": "",
+        "is_completed": False,
+        "is_current": False,
+        "icon_class": icon,
+        "extra_classes": " ".join(extra),
+        "themes": [],
+    }
+
+
+def _insert_intensive_blocks(lesson_nodes: list[dict], blocks: list) -> list[dict]:
+    """Вставляет блоки intensive сразу после урока after_lesson."""
+    by_after = defaultdict(list)
+    for block in blocks:
+        by_after[block["after_lesson"]].append(dict(block))
+    for group in by_after.values():
+        group.sort(key=lambda b: (b.get("sort_order") or 0, b.get("name") or ""))
+
+    inserted = []
+    for lesson in lesson_nodes:
+        inserted.append(lesson)
+        for block in by_after.get(lesson["name"], []):
+            inserted.append(_intensive_lesson_node(block))
+    return inserted
+
+
 async def build_classroom_tree(
         courses: list,
         lessons: list,
         themes: list,
         conn,
         current_theme_pos: int | None = None,
-        current_theme_name: str | None = None
+        current_theme_name: str | None = None,
+        intensive_blocks: list | None = None,
 ) -> dict:
     """
     Вспомогательная функция для функции get_classroom_tree:
@@ -99,8 +150,6 @@ async def build_classroom_tree(
         ]
     }
     """
-
-    from collections import defaultdict
 
     lessons_by_course = defaultdict(list)
     for lesson in lessons:
@@ -208,6 +257,14 @@ async def build_classroom_tree(
 
             course_dict["lessons"].append(lesson_dict)
 
+        course_blocks = [
+            b for b in (intensive_blocks or [])
+            if str(b.get("after_lesson") or "").startswith(course["name"])
+        ]
+        course_dict["lessons"] = _insert_intensive_blocks(
+            course_dict["lessons"], course_blocks
+        )
+
         result.append(course_dict)
 
     return {"courses": result}
@@ -264,6 +321,24 @@ async def get_classroom_tree(
             lang_prefix, user_access_level
         )
 
+        intensive_blocks = await conn.fetch(
+            """
+            SELECT
+                name,
+                title,
+                block_type,
+                after_lesson,
+                sort_order,
+                file_name,
+                ($2 = ANY(permission)) AS is_clickable
+            FROM intensive_blocks
+            WHERE after_lesson LIKE $1 || '%'
+              AND $2 = ANY(visibility)
+            ORDER BY after_lesson, sort_order, name
+            """,
+            lang_prefix, user_access_level
+        )
+
         # === Определяем pos текущей темы ===
         if target_exercise is None:
 
@@ -289,7 +364,8 @@ async def get_classroom_tree(
             themes=themes,
             conn=conn,
             current_theme_pos=current_theme_pos,
-            current_theme_name=current_theme_name
+            current_theme_name=current_theme_name,
+            intensive_blocks=intensive_blocks,
         )
 
     return tree
