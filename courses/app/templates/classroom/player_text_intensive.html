@@ -62,18 +62,26 @@
         background: #f7faf3;
         border-top: 1px solid #c5e1a5;
     }
-    .ti-toc-toggle {
+    .ti-toc-bar {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        width: 100%;
-        border: 0;
-        background: transparent;
+        gap: 12px;
         padding: 8px 18px;
+    }
+    .ti-toc-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid #86bc42;
+        background: #fff;
+        padding: 6px 12px;
         cursor: pointer;
         color: #2d3e50;
         font-weight: 600;
-        font-size: 0.92rem;
+        font-size: 0.88rem;
+        border-radius: 4px;
+        line-height: 1.2;
     }
     .ti-toc-toggle:hover { background: #eef6e3; }
     .ti-toc-toggle-left { display: inline-flex; align-items: center; gap: 8px; }
@@ -88,6 +96,7 @@
         font-weight: 500;
         color: #607d8b;
         font-size: 0.85rem;
+        white-space: nowrap;
     }
     .ti-toc-panel {
         max-height: 0;
@@ -133,7 +142,7 @@
 <div data-slot="sticky">
     <div class="exercise-header" data-mode="text_intensive" data-theme="{{ theme_name }}">
         <h3 id="exerciseTitle">{{ theme_title or theme_heading or theme_name }}</h3>
-        <h4 id="exerciseSecondTitle">{% if view == 'lobby' %}Text Intensive{% endif %}</h4>
+        <h4 id="exerciseSecondTitle"></h4>
         <p class="mb-0 mt-1" id="exerciseSubtitle">{{ theme_name }}</p>
     </div>
     <div class="ti-audio-bar">
@@ -157,14 +166,15 @@
             </div>
         </div>
     </div>
-    <div class="ti-toc" id="tiToc">
-        <button type="button" class="ti-toc-toggle" id="tiTocToggle" aria-expanded="false" aria-controls="tiTocPanel">
-            <span class="ti-toc-toggle-left">
+    <div class="ti-toc open" id="tiToc">
+        <div class="ti-toc-bar">
+            <button type="button" class="ti-toc-toggle" id="tiTocToggle"
+                    aria-expanded="true" aria-controls="tiTocPanel">
                 <span class="ti-toc-chevron" aria-hidden="true">▸</span>
-                <span>Упражнения</span>
-            </span>
+                <span id="tiTocToggleLabel">Свернуть список</span>
+            </button>
             <span class="ti-toc-toggle-right" id="tiTocSummary"></span>
-        </button>
+        </div>
         <div class="ti-toc-panel" id="tiTocPanel">
             <div class="ti-toc-list" id="tiTocList"></div>
         </div>
@@ -180,21 +190,9 @@
 
 <div data-slot="content">
 <div class="ti-root p-4" data-theme="{{ theme_name }}" data-view="{{ view }}">
-{% if view == 'lobby' %}
-    <div class="text-center py-5 px-3">
-        <h4>{{ theme_title or 'Текстовый интенсив' }}</h4>
-        <p class="text-muted mb-4">Одно аудио на весь блок. Задания прокручиваются ниже, плеер остаётся на месте.</p>
-        <button class="btn button-in-table-green btn-auto-fit"
-                type="button"
-                onclick="Classroom.enterTheme('{{ theme_name }}')">
-            Начать блок
-        </button>
-    </div>
-{% else %}
     <div id="exerciseBody">
-        <div class="text-center py-5 text-muted">Загрузка блока...</div>
+        <div class="text-center py-5 text-muted">Выберите упражнение из списка</div>
     </div>
-{% endif %}
 </div>
 </div>
 
@@ -255,26 +253,37 @@ window.TextLab = {
 
     bindToc() {
         const toggle = document.getElementById('tiTocToggle');
-        const toc = document.getElementById('tiToc');
-        if (!toggle || !toc || toggle.dataset.bound === '1') return;
+        if (!toggle || toggle.dataset.bound === '1') return;
         toggle.dataset.bound = '1';
         toggle.addEventListener('click', () => this.toggleToc());
+        this.syncTocUi();
+    },
+
+    isTocOpen() {
+        const toc = document.getElementById('tiToc');
+        return !!(toc && toc.classList.contains('open'));
+    },
+
+    syncTocUi() {
+        const toggle = document.getElementById('tiTocToggle');
+        const label = document.getElementById('tiTocToggleLabel');
+        const open = this.isTocOpen();
+        if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (label) label.textContent = open ? 'Свернуть список' : 'Развернуть список';
         try {
-            if (localStorage.getItem(this.tocOpenStorageKey()) === '1') {
-                toc.classList.add('open');
-                toggle.setAttribute('aria-expanded', 'true');
-            }
+            localStorage.setItem(this.tocOpenStorageKey(), open ? '1' : '0');
         } catch (err) { /* ignore */ }
     },
 
-    toggleToc() {
+    setTocOpen(open) {
         const toc = document.getElementById('tiToc');
-        const toggle = document.getElementById('tiTocToggle');
         if (!toc) return;
-        const open = !toc.classList.contains('open');
-        toc.classList.toggle('open', open);
-        if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        try { localStorage.setItem(this.tocOpenStorageKey(), open ? '1' : '0'); } catch (err) { /* ignore */ }
+        toc.classList.toggle('open', !!open);
+        this.syncTocUi();
+    },
+
+    toggleToc() {
+        this.setTocOpen(!this.isTocOpen());
     },
 
     renderToc() {
@@ -312,7 +321,10 @@ window.TextLab = {
     // --------------------------------------------------
     // Загрузка упражнения
     // --------------------------------------------------
-    async loadExercise(id) {
+    async loadExercise(id, options) {
+        const opts = options || {};
+        const collapseToc = opts.collapseToc !== false;
+
         if (!document.getElementById('exerciseBody')) {
             if (window.Classroom && Classroom.players) {
                 Classroom.players.load({
@@ -338,15 +350,20 @@ window.TextLab = {
             return;
         }
         this.render(data);
+        if (collapseToc) this.setTocOpen(false);
     },
 
     // --------------------------------------------------
     // Диспетчер рендера
     // --------------------------------------------------
     render(data) {
-        document.getElementById('exerciseTitle').textContent = data.title || 'Упражнение';
-        document.getElementById('exerciseSecondTitle').textContent = this.typeLabel(data.type);
-        document.getElementById('exerciseSubtitle').textContent = data.id || '';
+        const titleEl = document.getElementById('exerciseTitle');
+        const secondEl = document.getElementById('exerciseSecondTitle');
+        const subtitleEl = document.getElementById('exerciseSubtitle');
+        const exerciseName = data.title || this.typeLabel(data.type) || data.id || '';
+        if (titleEl) titleEl.textContent = exerciseName;
+        if (secondEl) secondEl.textContent = this.blockTitle || this.typeLabel(data.type) || '';
+        if (subtitleEl) subtitleEl.textContent = this.typeLabel(data.type) || data.id || '';
 
         const container = document.getElementById('exerciseBody');
 
@@ -1458,6 +1475,7 @@ window.TextLab = {
                 TextLab.loadProgress();
                 TextLab.bindToc();
                 TextLab.renderToc();
+                TextLab.setTocOpen(true);
 
                 const audio = document.getElementById('tiAudio');
                 if (audio && TextLab.audioUrl && audio.getAttribute('src') !== TextLab.audioUrl) {
@@ -1467,9 +1485,8 @@ window.TextLab = {
                 const title = document.getElementById('exerciseTitle');
                 if (title && TextLab.blockTitle) title.textContent = TextLab.blockTitle;
 
-                if (opts.view === 'exercise' && TextLab.exercises.length) {
-                    const startId = opts.exercise || TextLab.exercises[0].id;
-                    TextLab.loadExercise(startId);
+                if (opts.exercise) {
+                    TextLab.loadExercise(opts.exercise, { collapseToc: true });
                 }
             } catch (err) {
                 console.error(err);
