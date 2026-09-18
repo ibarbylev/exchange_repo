@@ -109,6 +109,29 @@ def save(data: dict[str, Any]) -> None:
     tmp_file.replace(DATA_FILE)
 
 
+def load_block_file(file_name: str) -> dict[str, Any]:
+    """
+    Загружает JSON блока интенсива по file_name из intensive_blocks.
+    Пример: BGRUA1_text1_to_lesson06 → data/BGRUA1_text1_to_lesson06.json
+    """
+    name = (file_name or "").removesuffix(".json").strip()
+    if not name:
+        raise FileNotFoundError("file_name пустой")
+    path = DATA_DIR / f"{name}.json"
+    if not path.exists():
+        raise FileNotFoundError(f"Нет файла блока: {path.name}")
+    with path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    data.setdefault("course", name.split("_")[0] if "_" in name else "")
+    data.setdefault("text_block", name)
+    data.setdefault("title", name)
+    data.setdefault("audio", None)
+    data.setdefault("exercises", [])
+    data.setdefault("transcript", "")
+    data["audio_url"] = get_audio_url(data.get("course") or "", data.get("audio"))
+    return data
+
+
 def get_block_info() -> dict[str, Any]:
     """
     Возвращает метаинформацию о текущем текстовом блоке

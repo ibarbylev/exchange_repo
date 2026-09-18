@@ -19,6 +19,14 @@ PLAYERS = {
 router = APIRouter(tags=["classroom"])
 
 
+async def _intensive_file_name(pool, block_name: str) -> str | None:
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            "SELECT file_name FROM intensive_blocks WHERE name = $1",
+            block_name,
+        )
+
+
 def theme_heading(theme_name: str) -> str:
     match = re.match(r"A(\d)(\d{2,3})_H(\d+)", theme_name or "")
     if not match:
@@ -48,8 +56,11 @@ def detect_player(theme: dict, requested: str | None = None) -> str:
     value = str(theme.get("player") or theme.get("kind") or "").lower()
     if value in PLAYERS:
         return value
-    if value in {"listening", "textlab", "text_lab", "intensive"}:
+    if value in {"listening", "textlab", "text_lab", "intensive", "x"}:
         return "text_intensive"
+    if value in {"c", "coach", "coach_online"}:
+        return "coach_online"
+
     return "vqt"
 
 
@@ -58,6 +69,8 @@ def find_theme_in_tree(tree: dict | None, theme_name: str) -> dict | None:
         return None
     for course in tree.get("courses") or []:
         for lesson in course.get("lessons") or []:
+            if lesson.get("kind") == "intensive" and lesson.get("name") == theme_name:
+                return lesson
             for item in lesson.get("themes") or []:
                 if item.get("name") == theme_name:
                     return item
@@ -138,6 +151,23 @@ async def classroom_player(
     theme_data.setdefault("name", theme)
     mode = detect_player(theme_data, player)
 
+    if mode == "text_intensive":
+        file_name = theme_data.get("file_name")
+        if not file_name:
+            file_name = await _intensive_file_name(pool, theme)
+            if file_name:
+                theme_data["file_name"] = file_name
+        if file_name:
+            try:
+                from app.text_lab import storage as text_lab_storage
+                pack = text_lab_storage.load_block_file(file_name)
+                theme_data["audio_url"] = pack.get("audio_url") or ""
+                if pack.get("title"):
+                    theme_data["theme_title"] = pack["title"]
+                    theme_data["title"] = theme_data.get("title") or pack["title"]
+            except FileNotFoundError:
+                pass
+
     html = build_player_html(
         request,
         lang_pair,
@@ -155,8 +185,50 @@ async def classroom_player(
             "theme_name": theme,
             "view": view,
             "exercise_name": exercise,
+            "file_name": theme_data.get("file_name"),
         },
     })
+
+
+@router.get("/api/classroom/intensive/{block_name}")
+async def classroom_intensive_block(
+    block_name: str,
+    pool: DBPoolDep,
+    current_user: CurrentUser,
+):
+    """JSON блока Text Intensive: мета, аудио, транскрипт, упражнения."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT name, title, block_type, file_name
+            FROM intensive_blocks
+            WHERE name = $1
+            """,
+            block_name,
+        )
+    if not row:
+        return JSONResponse({"error": f"Блок не найден: {block_name}"}, status_code=404)
+    if (row["block_type"] or "X").upper() != "X":
+        return JSONResponse({"error": "Этот блок не Text Intensive"}, status_code=400)
+
+    from app.text_lab import storage as text_lab_storage
+    try:
+        pack = text_lab_storage.load_block_file(row["file_name"])
+    except FileNotFoundError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=404)
+
+    return {
+        "name": row["name"],
+        "title": row["title"] or pack.get("title"),
+        "file_name": row["file_name"],
+        "course": pack.get("course"),
+        "text_block": pack.get("text_block"),
+        "audio": pack.get("audio"),
+        "audio_url": pack.get("audio_url"),
+        "transcript": pack.get("transcript") or "",
+        "exercises": pack.get("exercises") or [],
+    }
+
 
 def parse_variants(variants_str: str | None) -> list[list[str]]:
     """

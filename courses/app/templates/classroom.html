@@ -182,6 +182,17 @@
                         </div>
                         <div class="children">
                             {% for lesson in course.lessons %}
+                            {% if lesson.kind == "intensive" %}
+                            <div class="tree-node theme-node {{ lesson.extra_classes }}
+                                        {% if not lesson.is_clickable %}locked{% endif %}"
+                                 data-theme="{{ lesson.name }}"
+                                 data-player="{{ lesson.player | default('text_intensive') }}">
+                                <div class="node-header">
+                                    <i class="{{ lesson.icon_class }} me-1 mx-2"></i>
+                                    <span>{{ lesson.title }}</span>
+                                </div>
+                            </div>
+                            {% else %}
                             <div class="tree-node {{ lesson.open_class }} {{ lesson.extra_classes }}
                                         {% if not lesson.is_clickable %}locked{% endif %}">
                                 <div class="node-header">
@@ -203,6 +214,7 @@
                                     {% endfor %}
                                 </div>
                             </div>
+                            {% endif %}
                             {% endfor %}
                         </div>
                     </div>
@@ -402,6 +414,7 @@
                 if (!node.classList.contains('tree-node')) return;
                 e.stopImmediatePropagation();
                 if (node.classList.contains('theme-node')) {
+                    if (node.classList.contains('locked')) return;
                     Classroom.tree.handleThemeClick(node);
                     return;
                 }
