@@ -59,9 +59,9 @@ def _intensive_lesson_node(block: dict) -> dict:
     block_type = (block.get("block_type") or "X").upper()
     extra = ["intensive-block", f"intensive-{block_type.lower()}"]
     if block_type == "C":
-        icon = "zmdi zmdi-account-box text-info"
+        icon = "fa-solid fa-person-chalkboard"
     else:
-        icon = "zmdi zmdi-collection-text text-primary"
+        icon = "fa-solid fa-chalkboard-user"
 
     title = block.get("title") or block.get("name")
     label = BLOCK_LABEL.get(block_type, "Intensive")
