@@ -62,46 +62,40 @@
         background: #f7faf3;
         border-top: 1px solid #c5e1a5;
     }
-    .ti-toc-bar {
+    .ti-current-line {
+        display: block;
+        width: 100%;
+        padding: 10px 18px 4px;
+        font-weight: 600;
+        color: #2d3e50;
+        font-size: 1rem;
+        line-height: 1.35;
+        background: #fff;
+    }
+    .ti-nav-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        padding: 8px 18px;
-    }
-    .ti-toc-toggle {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        border: 1px solid #86bc42;
+        padding: 8px 18px 10px;
         background: #fff;
-        padding: 6px 12px;
-        cursor: pointer;
-        color: #2d3e50;
-        font-weight: 600;
-        font-size: 0.88rem;
-        border-radius: 4px;
-        line-height: 1.2;
+        border-top: 1px solid #e8efdc;
     }
-    .ti-toc-toggle:hover { background: #eef6e3; }
-    .ti-toc-toggle-left { display: inline-flex; align-items: center; gap: 8px; }
-    .ti-toc-chevron {
-        display: inline-block;
-        width: 1em;
-        transition: transform 0.15s ease;
-        color: #86bc42;
+    .ti-nav-left {
+        display: flex;
+        align-items: center;
+        flex: 0 0 auto;
     }
-    .ti-toc.open .ti-toc-chevron { transform: rotate(90deg); }
-    .ti-toc-toggle-right {
-        font-weight: 500;
-        color: #607d8b;
-        font-size: 0.85rem;
-        white-space: nowrap;
+    .ti-nav-right {
+        display: flex;
+        align-items: center;
+        flex: 0 0 auto;
+        margin-left: auto;
     }
     .ti-toc-panel {
         max-height: 0;
         overflow: hidden;
-        transition: max-height 0.2s ease;
+        transition: max-height 1s ease;
         background: #fff;
         border-top: 1px solid #e8efdc;
     }
@@ -141,9 +135,8 @@
 
 <div data-slot="sticky">
     <div class="exercise-header" data-mode="text_intensive" data-theme="{{ theme_name }}">
-        <h3 id="exerciseTitle">{{ theme_title or theme_heading or theme_name }}</h3>
-        <h4 id="exerciseSecondTitle"></h4>
-        <p class="mb-0 mt-1" id="exerciseSubtitle">{{ theme_name }}</p>
+        <h4 id="exerciseTitle" class="mb-1">Работа с текстом</h4>
+        <h3 id="exerciseTextName" class="mb-0">{{ theme_title or theme_heading or theme_name }}</h3>
     </div>
     <div class="ti-audio-bar">
         <div class="d-flex align-items-center w-100">
@@ -167,24 +160,25 @@
         </div>
     </div>
     <div class="ti-toc open" id="tiToc">
-        <div class="ti-toc-bar">
-            <button type="button" class="ti-toc-toggle" id="tiTocToggle"
-                    aria-expanded="true" aria-controls="tiTocPanel">
-                <span class="ti-toc-chevron" aria-hidden="true">▸</span>
-                <span id="tiTocToggleLabel">Свернуть список</span>
-            </button>
-            <span class="ti-toc-toggle-right" id="tiTocSummary"></span>
+        {# === TI-TOC-LINE-1: имя текущего упражнения на всю ширину === #}
+        <div class="ti-current-line" id="tiTocCurrent"></div>
+        {# === TI-TOC-LINE-2: Назад/Далее слева, Свернуть/Развернуть справа, один стиль кнопок === #}
+        <div class="ti-nav-row">
+            <div class="ti-nav-left">
+                <button class="btn button-in-table-green mr-2" id="btnPrevBlock" type="button">← Назад</button>
+                <button class="btn button-in-table-green" id="btnNextBlock" type="button">Далее →</button>
+            </div>
+            <div class="ti-nav-right">
+                <button type="button" class="btn button-in-table-green" id="tiTocToggle"
+                        aria-expanded="true" aria-controls="tiTocPanel">
+                    <span id="tiTocToggleLabel">Свернуть список</span>
+                </button>
+            </div>
         </div>
+        {# === TI-TOC-PANEL: раскрывающийся список упражнений === #}
         <div class="ti-toc-panel" id="tiTocPanel">
             <div class="ti-toc-list" id="tiTocList"></div>
         </div>
-    </div>
-    <div class="d-flex justify-content-between align-items-center px-3 py-2 bg-white">
-        <div class="d-flex">
-            <button class="btn button-in-table-green w-50 mr-2" id="btnPrevBlock" type="button">← Назад</button>
-            <button class="btn button-in-table-green w-50" id="btnNextBlock" type="button">Далее →</button>
-        </div>
-        <div class="small text-muted" id="tiProgress"></div>
     </div>
 </div>
 
@@ -286,13 +280,44 @@ window.TextLab = {
         this.setTocOpen(!this.isTocOpen());
     },
 
+    exerciseDisplayName(ex, idx) {
+        if (!ex) return '';
+        const fallbackIndex = (typeof idx === 'number' && idx >= 0) ? idx : this.exercises.indexOf(ex);
+        return ex.title || this.typeLabel(ex.type) || ('Упражнение ' + ((fallbackIndex >= 0 ? fallbackIndex : 0) + 1));
+    },
+
+    currentExercise() {
+        return (this.exercises || []).find(ex => ex.id === this.currentId) || null;
+    },
+
+    updateBlockHeader() {
+        const title = document.getElementById('exerciseTitle');
+        const nameEl = document.getElementById('exerciseTextName');
+        if (title) title.textContent = 'Работа с текстом';
+        if (nameEl) {
+            nameEl.textContent = String(this.blockTitle || this.themeKey || '').trim().toUpperCase();
+        }
+    },
+
+    updateCurrentLabel() {
+        const el = document.getElementById('tiTocCurrent');
+        if (!el) return;
+        const ex = this.currentExercise();
+        const i = this.currentIndex();
+        if (!ex) {
+            el.textContent = '';
+            return;
+        }
+        const name = this.exerciseDisplayName(ex, i);
+        el.textContent = (i >= 0 ? ((i + 1) + '. ') : '') + name;
+        el.title = name;
+    },
+
     renderToc() {
         const list = document.getElementById('tiTocList');
-        const summary = document.getElementById('tiTocSummary');
         if (!list) return;
         const items = this.exercises || [];
-        const done = this.doneCount();
-        if (summary) summary.textContent = done + ' / ' + items.length;
+        this.updateCurrentLabel();
 
         if (!items.length) {
             list.innerHTML = '<div class="px-3 py-2 text-muted small">Список упражнений пока пуст</div>';
@@ -306,7 +331,7 @@ window.TextLab = {
             const cls = ['ti-toc-item'];
             if (isActive) cls.push('active');
             if (isDone) cls.push('done');
-            const title = ex.title || this.typeLabel(ex.type) || ('Упражнение ' + (idx + 1));
+            const title = this.exerciseDisplayName(ex, idx);
             return (
                 '<button type="button" class="' + cls.join(' ') + '" id="nav-' + ex.id + '"' +
                 ' data-exercise-id="' + ex.id + '"' +
@@ -357,13 +382,8 @@ window.TextLab = {
     // Диспетчер рендера
     // --------------------------------------------------
     render(data) {
-        const titleEl = document.getElementById('exerciseTitle');
-        const secondEl = document.getElementById('exerciseSecondTitle');
-        const subtitleEl = document.getElementById('exerciseSubtitle');
-        const exerciseName = data.title || this.typeLabel(data.type) || data.id || '';
-        if (titleEl) titleEl.textContent = exerciseName;
-        if (secondEl) secondEl.textContent = this.blockTitle || this.typeLabel(data.type) || '';
-        if (subtitleEl) subtitleEl.textContent = this.typeLabel(data.type) || data.id || '';
+        this.updateBlockHeader();
+        this.updateCurrentLabel();
 
         const container = document.getElementById('exerciseBody');
 
@@ -440,20 +460,15 @@ window.TextLab = {
         const i = this.currentIndex();
         if (i < 0) return;
         const next = this.exercises[i + step];
-        if (next) this.loadExercise(next.id);
+        if (next) this.loadExercise(next.id, { collapseToc: false });
     },
 
     updateNav() {
         const i = this.currentIndex();
         const prev = document.getElementById('btnPrevBlock');
         const next = document.getElementById('btnNextBlock');
-        const progress = document.getElementById('tiProgress');
         if (prev) prev.disabled = i <= 0;
         if (next) next.disabled = i < 0 || i >= (this.exercises.length - 1);
-        if (progress && i >= 0) {
-            progress.textContent = (i + 1) + ' / ' + this.exercises.length +
-                ' · готово ' + this.doneCount();
-        }
         this.renderToc();
     },
 
@@ -1474,19 +1489,19 @@ window.TextLab = {
                 TextLab.themeKey = theme || pack.text_block || pack.audio || '';
                 TextLab.loadProgress();
                 TextLab.bindToc();
+                TextLab.updateBlockHeader();
                 TextLab.renderToc();
-                TextLab.setTocOpen(true);
 
                 const audio = document.getElementById('tiAudio');
                 if (audio && TextLab.audioUrl && audio.getAttribute('src') !== TextLab.audioUrl) {
                     audio.src = TextLab.audioUrl;
                 }
 
-                const title = document.getElementById('exerciseTitle');
-                if (title && TextLab.blockTitle) title.textContent = TextLab.blockTitle;
-
-                if (opts.exercise) {
-                    TextLab.loadExercise(opts.exercise, { collapseToc: true });
+                if (TextLab.exercises.length) {
+                    const startId = opts.exercise || TextLab.exercises[0].id;
+                    TextLab.loadExercise(startId, { collapseToc: true });
+                } else {
+                    TextLab.setTocOpen(true);
                 }
             } catch (err) {
                 console.error(err);
