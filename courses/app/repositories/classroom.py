@@ -1,12 +1,27 @@
+import json
 import asyncpg
 
 from collections import defaultdict
+from typing import Any
 
 
 BLOCK_LABEL = {
     "X": "Text Intensive",
     "C": "Coach Online",
 }
+
+# Статусы узла интенсива в дереве.
+# rejected / not_accepted на дереве = current (текущая работа).
+TREE_STATUS_COMPLETED = "completed"
+TREE_STATUS_SUBMITTED = "submitted"
+TREE_STATUS_CURRENT = "current"
+TREE_STATUS_LOCKED = "locked"
+
+PLAYER_BY_BLOCK_TYPE = {
+    "X": "text_intensive",
+    "C": "coach_online",
+}
+
 
 async def get_theme_exercise_counts(conn, theme_name: str) -> dict:
     """
@@ -54,10 +69,48 @@ async def get_theme_exercise_counts(conn, theme_name: str) -> dict:
     return filtered
 
 
-def _intensive_lesson_node(block: dict) -> dict:
-    """Только отображение в дереве. Без клика и без плеера."""
+def _normalize_block_status(value: Any) -> str:
+    """Приводит запись прогресса пользователя к статусу блока."""
+    if isinstance(value, dict):
+        value = value.get("status") or value.get("state") or ""
+    raw = str(value or "").strip().lower()
+    if raw in {"completed", "done", "accepted", "passed"}:
+        return TREE_STATUS_COMPLETED
+    if raw in {"submitted", "review", "pending", "on_review", "sent"}:
+        return TREE_STATUS_SUBMITTED
+    if raw in {"current", "rejected", "not_accepted", "in_progress", "started", "returned"}:
+        return TREE_STATUS_CURRENT
+    return ""
+
+
+def _progress_map(progress: dict | None) -> dict[str, str]:
+    """
+    intensive_progress на пользователе:
+
+        {"BGRUA1_X06": "completed", "BGRUA1_X07": "submitted"}
+
+    или {"blocks": { ... }}.
+    """
+    if not progress:
+        return {}
+    if isinstance(progress, dict) and isinstance(progress.get("blocks"), dict):
+        progress = progress["blocks"]
+    result = {}
+    if isinstance(progress, dict):
+        for name, value in progress.items():
+            if name == "blocks":
+                continue
+            status = _normalize_block_status(value)
+            if status:
+                result[str(name)] = status
+    return result
+
+
+def _intensive_lesson_node(block: dict, tree_status: str) -> dict:
+    """Узел на уровне урока. Клик/плеер не подключаем."""
     block_type = (block.get("block_type") or "X").upper()
-    extra = ["intensive-block", f"intensive-{block_type.lower()}"]
+    extra = ["intensive-block", f"intensive-{block_type.lower()}", tree_status]
+
     if block_type == "C":
         icon = "fa-solid fa-person-chalkboard"
     else:
@@ -65,35 +118,69 @@ def _intensive_lesson_node(block: dict) -> dict:
 
     title = block.get("title") or block.get("name")
     label = BLOCK_LABEL.get(block_type, "Intensive")
+    tariff_ok = bool(block.get("is_clickable", True))
 
     return {
         "name": block["name"],
         "title": f"{label}: {title}",
         "kind": "intensive",
         "block_type": block_type,
+        "player": PLAYER_BY_BLOCK_TYPE.get(block_type, "text_intensive"),
+        "file_name": block.get("file_name"),
         "after_lesson": block.get("after_lesson"),
         "open_class": "",
-        "is_completed": False,
-        "is_current": False,
+        "is_clickable": tariff_ok and tree_status != TREE_STATUS_LOCKED,
+        "is_completed": tree_status == TREE_STATUS_COMPLETED,
+        "is_current": tree_status == TREE_STATUS_CURRENT,
+        "is_submitted": tree_status == TREE_STATUS_SUBMITTED,
+        "is_available": tree_status in {TREE_STATUS_CURRENT, TREE_STATUS_SUBMITTED},
+        "tree_status": tree_status,
         "icon_class": icon,
         "extra_classes": " ".join(extra),
         "themes": [],
     }
 
 
-def _insert_intensive_blocks(lesson_nodes: list[dict], blocks: list) -> list[dict]:
-    """Вставляет блоки intensive сразу после урока after_lesson."""
+def _series_status(block: dict, raw_status: str, predecessor_done: bool) -> str:
+    """
+    Серия X и серия C считаются отдельно.
+    Следующий блок открывается только после completed предыдущего той же серии.
+    submitted / current / rejected не открывают следующий.
+    """
+    tariff_ok = bool(block.get("is_clickable", True))
+    if raw_status == TREE_STATUS_COMPLETED:
+        return TREE_STATUS_COMPLETED
+    if not tariff_ok or not predecessor_done:
+        return TREE_STATUS_LOCKED
+    if raw_status == TREE_STATUS_SUBMITTED:
+        return TREE_STATUS_SUBMITTED
+    return TREE_STATUS_CURRENT
+
+
+def _insert_intensive_blocks(
+        lesson_nodes: list[dict],
+        blocks: list,
+        progress: dict | None = None,
+) -> list[dict]:
+    """Вставляет блоки intensive после after_lesson и проставляет статус серии."""
+    progress = _progress_map(progress)
     by_after = defaultdict(list)
     for block in blocks:
         by_after[block["after_lesson"]].append(dict(block))
     for group in by_after.values():
         group.sort(key=lambda b: (b.get("sort_order") or 0, b.get("name") or ""))
 
+    # Порядок серии = порядок появления в дереве (after_lesson + sort_order).
+    predecessor_done = {"X": True, "C": True}
     inserted = []
     for lesson in lesson_nodes:
         inserted.append(lesson)
         for block in by_after.get(lesson["name"], []):
-            inserted.append(_intensive_lesson_node(block))
+            block_type = (block.get("block_type") or "X").upper()
+            raw = progress.get(block["name"], "")
+            status = _series_status(block, raw, predecessor_done.get(block_type, True))
+            inserted.append(_intensive_lesson_node(block, status))
+            predecessor_done[block_type] = status == TREE_STATUS_COMPLETED
     return inserted
 
 
@@ -105,6 +192,7 @@ async def build_classroom_tree(
         current_theme_pos: int | None = None,
         current_theme_name: str | None = None,
         intensive_blocks: list | None = None,
+        intensive_progress: dict | None = None,
 ) -> dict:
     """
     Вспомогательная функция для функции get_classroom_tree:
@@ -262,7 +350,7 @@ async def build_classroom_tree(
             if str(b.get("after_lesson") or "").startswith(course["name"])
         ]
         course_dict["lessons"] = _insert_intensive_blocks(
-            course_dict["lessons"], course_blocks
+            course_dict["lessons"], course_blocks, intensive_progress
         )
 
         result.append(course_dict)
@@ -270,11 +358,35 @@ async def build_classroom_tree(
     return {"courses": result}
 
 
+async def _load_intensive_progress(conn, user_id: int | None) -> dict:
+    """Читает users.intensive_progress. Нет колонки или пользователя — пустой прогресс."""
+    if not user_id:
+        return {}
+    try:
+        row = await conn.fetchval(
+            "SELECT intensive_progress FROM users WHERE id = $1",
+            user_id,
+        )
+    except Exception:
+        return {}
+    if not row:
+        return {}
+    if isinstance(row, str):
+        try:
+            return json.loads(row)
+        except Exception as e:
+            print(e)
+            return {}
+    return dict(row) if isinstance(row, dict) else {}
+
+
 async def get_classroom_tree(
-    pool: asyncpg.Pool,
-    lang_prefix: str,
-    user_access_level: int,
-    target_exercise: str | None = None
+        pool: asyncpg.Pool,
+        lang_prefix: str,
+        user_access_level: int,
+        target_exercise: str | None = None,
+        user_id: int | None = None,
+        intensive_progress: dict | None = None,
 ) -> dict:
     """
     Получает из БД списки курсов, уроков, тем и формирует из них дерево,
@@ -358,6 +470,9 @@ async def get_classroom_tree(
         current_theme_pos = current_theme["pos"] if current_theme else None
         current_theme_name = current_theme["name"] if current_theme else None
 
+        if intensive_progress is None:
+            intensive_progress = await _load_intensive_progress(conn, user_id)
+
         tree = await build_classroom_tree(
             courses=courses,
             lessons=lessons,
@@ -366,6 +481,7 @@ async def get_classroom_tree(
             current_theme_pos=current_theme_pos,
             current_theme_name=current_theme_name,
             intensive_blocks=intensive_blocks,
+            intensive_progress=intensive_progress,
         )
 
     return tree

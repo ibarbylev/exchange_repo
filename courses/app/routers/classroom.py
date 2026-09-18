@@ -128,6 +128,8 @@ async def classroom_player(
         lang_prefix=f"{lang_pair.source_lang}{lang_pair.ui_lang}".upper(),
         user_access_level=access_level,
         target_exercise=current_user.get("current_exercise") if current_user else None,
+        user_id=(current_user.get("user_id") or current_user.get("id")) if current_user else None,
+        intensive_progress=current_user.get("intensive_progress") if current_user else None,
     )
     theme_data = find_theme_in_tree(tree_data, theme)
     if not theme_data:
@@ -227,7 +229,9 @@ async def get_classroom(
         pool=pool,
         lang_prefix=lang_prefix,
         user_access_level=user_access_level,
-        target_exercise=target_exercise
+        target_exercise=target_exercise,
+        user_id = (current_user.get("user_id") or current_user.get("id")) if current_user else None,
+        intensive_progress = current_user.get("intensive_progress") if current_user else None,
     )
 
     access_names = {
