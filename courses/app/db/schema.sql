@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_login          TIMESTAMPTZ,
     current_exercise    VARCHAR(150),
     intensive_progress  JSONB NOT NULL DEFAULT '{}'::jsonb,
+    exercise_stars      JSONB NOT NULL DEFAULT '{}'::jsonb,  -- json {exercise_name: <1, 2 or 3>}
 
     is_active           BOOLEAN DEFAULT true NOT NULL,
     is_superuser        BOOLEAN DEFAULT false NOT NULL,
