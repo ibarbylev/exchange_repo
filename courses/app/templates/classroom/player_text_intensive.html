@@ -131,6 +131,20 @@
     .ti-toc-num { flex: 0 0 1.6em; color: #90a4ae; font-variant-numeric: tabular-nums; }
     .ti-toc-item.active .ti-toc-num { color: #1565c0; }
     .ti-toc-title { flex: 1 1 auto; min-width: 0; }
+    .ti-toc-stars {
+        margin-left: auto;
+        flex: 0 0 auto;
+        color: #f9a825;
+        letter-spacing: 1px;
+        font-size: 0.82rem;
+    }
+    .ti-toc-item.locked {
+        opacity: 0.42;
+        cursor: not-allowed;
+        color: #90a4ae;
+    }
+    .ti-toc-item.locked:hover { background: transparent; }
+    .ti-toc-item.done.active { background: #e3f2fd; }
 </style>
 
 <div data-slot="sticky">
@@ -200,8 +214,12 @@ window.TextLab = {
     audioUrl: '',
     transcript: '',
     currentId: null,
+    cursorId: null,
     blockTitle: '',
     themeKey: '',
+    series: 'X',
+    treeStatus: 'current',
+    stars: {},
     progress: {},
 
     setAudioSpeed(value) {
@@ -232,11 +250,96 @@ window.TextLab = {
         } catch (err) { /* ignore quota / private mode */ }
     },
 
+    starsFromRatio(correct, total) {
+        if (!total) return 0;
+        const ratio = Number(correct) / Number(total);
+        if (ratio >= 1) return 3;
+        if (ratio >= 0.85) return 2;
+        if (ratio >= 0.70) return 1;
+        return 0;
+    },
+
+    parseScore(meta) {
+        if (!meta) return null;
+        if (typeof meta.correct === 'number' && typeof meta.total === 'number') {
+            return { correct: meta.correct, total: meta.total };
+        }
+        const raw = String(meta.score || '');
+        const match = raw.match(/^(\d+)\s*\/\s*(\d+)$/);
+        if (!match) return null;
+        return { correct: Number(match[1]), total: Number(match[2]) };
+    },
+
+    starsMarkup(count) {
+        const n = Number(count) || 0;
+        if (n < 1) return '';
+        return '★'.repeat(n) + '☆'.repeat(Math.max(0, 3 - n));
+    },
+
+    cursorIndex() {
+        if (!this.cursorId) return 0;
+        const idx = (this.exercises || []).findIndex(ex => ex.id === this.cursorId);
+        if (idx >= 0) return idx;
+        if (this.treeStatus === 'completed') return (this.exercises || []).length;
+        return 0;
+    },
+
+    exerciseState(idx) {
+        if (this.treeStatus === 'locked') return 'locked';
+        if (this.treeStatus === 'completed') return 'done';
+        const cursorIdx = this.cursorIndex();
+        if (idx < cursorIdx) return 'done';
+        if (idx === cursorIdx) return 'active';
+        return 'locked';
+    },
+
+    persistStars(exerciseId, stars) {
+        if (!exerciseId || !stars) return;
+        const prev = Number(this.stars[exerciseId] || 0);
+        const next = Math.max(prev, stars);
+        this.stars[exerciseId] = next;
+        fetch('/api/user/exercise-stars', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ exercise_name: exerciseId, stars: next })
+        }).catch(() => {});
+    },
+
+    persistCursor(exerciseId) {
+        if (!exerciseId) return;
+        const prevIdx = this.cursorIndex();
+        const nextIdx = (this.exercises || []).findIndex(ex => ex.id === exerciseId);
+        if (nextIdx >= 0 && nextIdx >= prevIdx) {
+            this.cursorId = exerciseId;
+            if (this.treeStatus === 'locked') this.treeStatus = 'current';
+        }
+        fetch('/api/user/intensive-progress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ exercise_name: exerciseId, series: this.series || 'X' })
+        }).catch(() => {});
+    },
+
     markCurrentDone(meta) {
         if (!this.currentId) return;
         const prev = this.progress[this.currentId] || {};
         this.progress[this.currentId] = Object.assign({}, prev, { done: true }, meta || {});
         this.saveProgress();
+
+        const parsed = this.parseScore(meta);
+        if (parsed && parsed.total) {
+            const stars = this.starsFromRatio(parsed.correct, parsed.total);
+            if (stars) this.persistStars(this.currentId, stars);
+        }
+
+        const i = this.currentIndex();
+        const next = (i >= 0) ? this.exercises[i + 1] : null;
+        if (next) {
+            this.persistCursor(next.id);
+        } else {
+            this.persistCursor(this.currentId);
+            this.treeStatus = 'completed';
+        }
         this.renderToc();
         this.updateNav();
     },
@@ -325,20 +428,27 @@ window.TextLab = {
         }
 
         list.innerHTML = items.map((ex, idx) => {
-            const isDone = !!(this.progress[ex.id] && this.progress[ex.id].done);
-            const isActive = ex.id === this.currentId;
+            const state = this.exerciseState(idx);
+            const isDone = state === 'done';
+            const isActive = state === 'active';
+            const isLocked = state === 'locked';
             const mark = isDone ? '✓' : (isActive ? '●' : '○');
             const cls = ['ti-toc-item'];
             if (isActive) cls.push('active');
             if (isDone) cls.push('done');
+            if (isLocked) cls.push('locked');
             const title = this.exerciseDisplayName(ex, idx);
+            const stars = this.starsMarkup(this.stars[ex.id]);
+            const action = isLocked
+                ? ' disabled'
+                : ' onclick="TextLab.loadExercise(\'' + ex.id + '\')"';
             return (
                 '<button type="button" class="' + cls.join(' ') + '" id="nav-' + ex.id + '"' +
-                ' data-exercise-id="' + ex.id + '"' +
-                ' onclick="TextLab.loadExercise(\'' + ex.id + '\')">' +
+                ' data-exercise-id="' + ex.id + '"' + action + '>' +
                 '<span class="ti-toc-mark">' + mark + '</span>' +
                 '<span class="ti-toc-num">' + (idx + 1) + '.</span>' +
                 '<span class="ti-toc-title">' + title + '</span>' +
+                (stars ? '<span class="ti-toc-stars">' + stars + '</span>' : '') +
                 '</button>'
             );
         }).join('');
@@ -349,6 +459,8 @@ window.TextLab = {
     async loadExercise(id, options) {
         const opts = options || {};
         const collapseToc = opts.collapseToc !== false;
+        const idx = (this.exercises || []).findIndex(ex => ex.id === id);
+        if (idx >= 0 && this.exerciseState(idx) === 'locked') return;
 
         if (!document.getElementById('exerciseBody')) {
             if (window.Classroom && Classroom.players) {
@@ -459,16 +571,20 @@ window.TextLab = {
     goRelative(step) {
         const i = this.currentIndex();
         if (i < 0) return;
-        const next = this.exercises[i + step];
-        if (next) this.loadExercise(next.id, { collapseToc: false });
+        const target = i + step;
+        if (target < 0 || target >= this.exercises.length) return;
+        if (this.exerciseState(target) === 'locked') return;
+        this.loadExercise(this.exercises[target].id, { collapseToc: false });
     },
 
     updateNav() {
         const i = this.currentIndex();
         const prev = document.getElementById('btnPrevBlock');
         const next = document.getElementById('btnNextBlock');
-        if (prev) prev.disabled = i <= 0;
-        if (next) next.disabled = i < 0 || i >= (this.exercises.length - 1);
+        const prevLocked = i <= 0 || this.exerciseState(i - 1) === 'locked';
+        const nextLocked = i < 0 || i >= (this.exercises.length - 1) || this.exerciseState(i + 1) === 'locked';
+        if (prev) prev.disabled = prevLocked;
+        if (next) next.disabled = nextLocked;
         this.renderToc();
     },
 
@@ -1487,6 +1603,13 @@ window.TextLab = {
                 TextLab.transcript = pack.transcript || '';
                 TextLab.blockTitle = pack.title || '';
                 TextLab.themeKey = theme || pack.text_block || pack.audio || '';
+                TextLab.series = pack.series || 'X';
+                TextLab.treeStatus = pack.tree_status || 'current';
+                TextLab.stars = pack.exercise_stars || {};
+                TextLab.cursorId = pack.current_exercise || null;
+                if (!TextLab.cursorId && TextLab.exercises.length && TextLab.treeStatus !== 'locked') {
+                    TextLab.cursorId = TextLab.exercises[0].id;
+                }
                 TextLab.loadProgress();
                 TextLab.bindToc();
                 TextLab.updateBlockHeader();
@@ -1498,7 +1621,22 @@ window.TextLab = {
                 }
 
                 if (TextLab.exercises.length) {
-                    const startId = opts.exercise || TextLab.exercises[0].id;
+                    const requested = opts.exercise;
+                    const reqIdx = requested
+                        ? TextLab.exercises.findIndex(ex => ex.id === requested)
+                        : -1;
+                    let startId;
+                    if (reqIdx >= 0 && TextLab.exerciseState(reqIdx) !== 'locked') {
+                        startId = requested;
+                    } else if (TextLab.treeStatus === 'completed') {
+                        startId = TextLab.exercises[0].id;
+                    } else {
+                        const cursorIdx = Math.min(
+                            Math.max(TextLab.cursorIndex(), 0),
+                            TextLab.exercises.length - 1
+                        );
+                        startId = TextLab.exercises[cursorIdx].id;
+                    }
                     TextLab.loadExercise(startId, { collapseToc: true });
                 } else {
                     TextLab.setTocOpen(true);

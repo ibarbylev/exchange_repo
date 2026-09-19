@@ -10,10 +10,7 @@ BLOCK_LABEL = {
     "C": "Coach Online",
 }
 
-# Статусы узла интенсива в дереве.
-# rejected / not_accepted на дереве = current (текущая работа).
 TREE_STATUS_COMPLETED = "completed"
-TREE_STATUS_SUBMITTED = "submitted"
 TREE_STATUS_CURRENT = "current"
 TREE_STATUS_LOCKED = "locked"
 
@@ -41,14 +38,10 @@ async def get_theme_exercise_counts(conn, theme_name: str) -> dict:
         GROUP BY exercise_type, permission_level
     """, theme_name)
 
-    # Инициализация всех возможных типов
     counts = {
         "V": [0, 0, 0],
         "Q": [0, 0, 0],
         "T": [0, 0, 0],
-        # "P": [0, 0, 0],
-        # "X": [0, 0, 0],
-        # "E": [0, 0, 0],
     }
 
     for row in rows:
@@ -59,55 +52,114 @@ async def get_theme_exercise_counts(conn, theme_name: str) -> dict:
         if ex_type in counts and 0 <= perm <= 2:
             counts[ex_type][perm] = count
 
-    # Убираем типы упражнений, где везде 0
-    filtered = {
+    return {
         ex_type: count_list
         for ex_type, count_list in counts.items()
         if any(count_list)
     }
 
-    return filtered
 
-
-def _normalize_block_status(value: Any) -> str:
-    """Приводит запись прогресса пользователя к статусу блока."""
-    if isinstance(value, dict):
-        value = value.get("status") or value.get("state") or ""
-    raw = str(value or "").strip().lower()
-    if raw in {"completed", "done", "accepted", "passed"}:
-        return TREE_STATUS_COMPLETED
-    if raw in {"submitted", "review", "pending", "on_review", "sent"}:
-        return TREE_STATUS_SUBMITTED
-    if raw in {"current", "rejected", "not_accepted", "in_progress", "started", "returned"}:
-        return TREE_STATUS_CURRENT
-    return ""
-
-
-def _progress_map(progress: dict | None) -> dict[str, str]:
-    """
-    intensive_progress на пользователе:
-
-        {"BGRUA1_X06": "completed", "BGRUA1_X07": "submitted"}
-
-    или {"blocks": { ... }}.
-    """
-    if not progress:
+def _parse_json_map(value: Any) -> dict:
+    if not value:
         return {}
-    if isinstance(progress, dict) and isinstance(progress.get("blocks"), dict):
-        progress = progress["blocks"]
-    result = {}
-    if isinstance(progress, dict):
-        for name, value in progress.items():
-            if name == "blocks":
-                continue
-            status = _normalize_block_status(value)
-            if status:
-                result[str(name)] = status
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            return {}
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _star_value(raw: Any) -> int | None:
+    try:
+        stars = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return stars if stars in (1, 2, 3) else None
+
+
+def aggregate_stars(exercise_names: list[str] | None, stars_map: dict | None) -> int | None:
+    """
+    Звезда уровня = min по всем упражнениям уровня.
+    Нет оценки хотя бы у одного упражнения → звёзд у уровня нет.
+    """
+    names = [str(name) for name in (exercise_names or []) if name]
+    if not names:
+        return None
+    values = []
+    mapping = stars_map or {}
+    for name in names:
+        stars = _star_value(mapping.get(name))
+        if stars is None:
+            return None
+        values.append(stars)
+    return min(values) if values else None
+
+
+def _intensive_cursors(progress: dict | None) -> dict[str, str | None]:
+    """
+    intensive_progress:
+
+        {"X": "word_01_mc_01", "C": "BGRUA1_C03"}
+
+    X и C — параллельные курсоры, не статусы блоков.
+    """
+    data = _parse_json_map(progress)
+    result = {"X": None, "C": None}
+    for series in ("X", "C"):
+        raw = data.get(series)
+        if raw is None:
+            raw = data.get(series.lower())
+        if isinstance(raw, dict):
+            raw = raw.get("exercise") or raw.get("block") or raw.get("name")
+        text = str(raw or "").strip()
+        result[series] = text or None
     return result
 
 
-def _intensive_lesson_node(block: dict, tree_status: str) -> dict:
-    """Узел на уровне урока. Клик/плеер не подключаем."""
+def _block_exercise_ids(file_name: str | None) -> list[str]:
+    if not file_name:
+        return []
+    try:
+        from app.text_lab import storage as text_lab_storage
+        pack = text_lab_storage.load_block_file(file_name)
+    except Exception:
+        return []
+    ids = []
+    for item in pack.get("exercises") or []:
+        exercise_id = item.get("id") if isinstance(item, dict) else None
+        if exercise_id:
+            ids.append(str(exercise_id))
+    return ids
+
+
+def _cursor_series_index(blocks: list[dict], cursor: str | None) -> int:
+    """Индекс текущего блока в серии. Нет курсора — открыт первый блок (0)."""
+    if not blocks:
+        return 0
+    if not cursor:
+        return 0
+    for index, block in enumerate(blocks):
+        if block.get("name") == cursor:
+            return index
+        if cursor in (block.get("exercise_ids") or []):
+            return index
+    return 0
+
+
+def _series_tree_status(block: dict, series_index: int, cursor_index: int) -> str:
+    tariff_ok = bool(block.get("is_clickable", True))
+    if not tariff_ok:
+        return TREE_STATUS_LOCKED
+    if series_index < cursor_index:
+        return TREE_STATUS_COMPLETED
+    if series_index == cursor_index:
+        return TREE_STATUS_CURRENT
+    return TREE_STATUS_LOCKED
+
+
+def _intensive_lesson_node(block: dict, tree_status: str, stars: int | None = None) -> dict:
+    """Узел на уровне урока."""
     block_type = (block.get("block_type") or "X").upper()
     extra = ["intensive-block", f"intensive-{block_type.lower()}", tree_status]
 
@@ -128,12 +180,13 @@ def _intensive_lesson_node(block: dict, tree_status: str) -> dict:
         "player": PLAYER_BY_BLOCK_TYPE.get(block_type, "text_intensive"),
         "file_name": block.get("file_name"),
         "after_lesson": block.get("after_lesson"),
-        "open_class": "",
+        "exercise_ids": list(block.get("exercise_ids") or []),
+        "stars": stars,
+        "open_class": "open" if tree_status == TREE_STATUS_CURRENT else "",
         "is_clickable": tariff_ok and tree_status != TREE_STATUS_LOCKED,
         "is_completed": tree_status == TREE_STATUS_COMPLETED,
         "is_current": tree_status == TREE_STATUS_CURRENT,
-        "is_submitted": tree_status == TREE_STATUS_SUBMITTED,
-        "is_available": tree_status in {TREE_STATUS_CURRENT, TREE_STATUS_SUBMITTED},
+        "is_available": tree_status == TREE_STATUS_CURRENT,
         "tree_status": tree_status,
         "icon_class": icon,
         "extra_classes": " ".join(extra),
@@ -141,47 +194,106 @@ def _intensive_lesson_node(block: dict, tree_status: str) -> dict:
     }
 
 
-def _series_status(block: dict, raw_status: str, predecessor_done: bool) -> str:
-    """
-    Серия X и серия C считаются отдельно.
-    Следующий блок открывается только после completed предыдущего той же серии.
-    submitted / current / rejected не открывают следующий.
-    """
-    tariff_ok = bool(block.get("is_clickable", True))
-    if raw_status == TREE_STATUS_COMPLETED:
-        return TREE_STATUS_COMPLETED
-    if not tariff_ok or not predecessor_done:
-        return TREE_STATUS_LOCKED
-    if raw_status == TREE_STATUS_SUBMITTED:
-        return TREE_STATUS_SUBMITTED
-    return TREE_STATUS_CURRENT
-
-
 def _insert_intensive_blocks(
         lesson_nodes: list[dict],
         blocks: list,
         progress: dict | None = None,
+        stars_map: dict | None = None,
 ) -> list[dict]:
-    """Вставляет блоки intensive после after_lesson и проставляет статус серии."""
-    progress = _progress_map(progress)
+    """Вставляет блоки intensive после after_lesson. Цвет — от курсора серии X/C."""
+    cursors = _intensive_cursors(progress)
     by_after = defaultdict(list)
-    for block in blocks:
-        by_after[block["after_lesson"]].append(dict(block))
+    prepared = []
+    for raw in blocks:
+        block = dict(raw)
+        block_type = (block.get("block_type") or "X").upper()
+        block["block_type"] = block_type
+        block["exercise_ids"] = _block_exercise_ids(block.get("file_name"))
+        prepared.append(block)
+        by_after[block["after_lesson"]].append(block)
     for group in by_after.values():
         group.sort(key=lambda b: (b.get("sort_order") or 0, b.get("name") or ""))
 
-    # Порядок серии = порядок появления в дереве (after_lesson + sort_order).
-    predecessor_done = {"X": True, "C": True}
+    ordered = {"X": [], "C": []}
+    for lesson in lesson_nodes:
+        for block in by_after.get(lesson["name"], []):
+            ordered[block["block_type"]].append(block)
+
+    cursor_index = {
+        series: _cursor_series_index(items, cursors.get(series))
+        for series, items in ordered.items()
+    }
+    seen = {"X": 0, "C": 0}
+
     inserted = []
     for lesson in lesson_nodes:
         inserted.append(lesson)
         for block in by_after.get(lesson["name"], []):
-            block_type = (block.get("block_type") or "X").upper()
-            raw = progress.get(block["name"], "")
-            status = _series_status(block, raw, predecessor_done.get(block_type, True))
-            inserted.append(_intensive_lesson_node(block, status))
-            predecessor_done[block_type] = status == TREE_STATUS_COMPLETED
+            block_type = block["block_type"]
+            series_index = seen[block_type]
+            seen[block_type] += 1
+            status = _series_tree_status(block, series_index, cursor_index[block_type])
+            stars = aggregate_stars(block.get("exercise_ids"), stars_map)
+            inserted.append(_intensive_lesson_node(block, status, stars))
     return inserted
+
+
+def series_exercise_order(blocks: list[dict]) -> list[tuple[str, str]]:
+    """
+    Плоский порядок упражнений серии: (block_name, exercise_id).
+    Если у блока нет упражнений, в порядок попадает сам block_name.
+    """
+    order: list[tuple[str, str]] = []
+    for block in blocks:
+        name = block.get("name")
+        ids = block.get("exercise_ids") or _block_exercise_ids(block.get("file_name"))
+        if ids:
+            for exercise_id in ids:
+                order.append((name, exercise_id))
+        elif name:
+            order.append((name, name))
+    return order
+
+
+def cursor_rank(order: list[tuple[str, str]], cursor: str | None) -> int:
+    """Позиция курсора в плоском порядке. Нет курсора = -1 (можно записать первый)."""
+    if not cursor:
+        return -1
+    for index, (block_name, exercise_id) in enumerate(order):
+        if cursor == exercise_id or cursor == block_name:
+            return index
+    return -1
+
+
+async def load_user_json_field(conn, user_id: int | None, column: str) -> dict:
+    if not user_id or column not in {"intensive_progress", "exercise_stars"}:
+        return {}
+    try:
+        row = await conn.fetchval(
+            f"SELECT {column} FROM users WHERE id = $1",
+            user_id,
+        )
+    except Exception:
+        return {}
+    return _parse_json_map(row)
+
+
+async def _load_theme_exercise_names(conn, theme_names: list[str]) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {name: [] for name in theme_names}
+    if not theme_names:
+        return result
+    rows = await conn.fetch(
+        """
+        SELECT theme_name, name
+        FROM exercises
+        WHERE theme_name = ANY($1::varchar[])
+        ORDER BY pos
+        """,
+        theme_names,
+    )
+    for row in rows:
+        result.setdefault(row["theme_name"], []).append(row["name"])
+    return result
 
 
 async def build_classroom_tree(
@@ -193,6 +305,8 @@ async def build_classroom_tree(
         current_theme_name: str | None = None,
         intensive_blocks: list | None = None,
         intensive_progress: dict | None = None,
+        exercise_stars: dict | None = None,
+        theme_exercise_names: dict[str, list[str]] | None = None,
 ) -> dict:
     """
     Вспомогательная функция для функции get_classroom_tree:
@@ -247,6 +361,9 @@ async def build_classroom_tree(
     for theme in themes:
         themes_by_lesson[theme["lesson_name"]].append(dict(theme))
 
+    stars_map = _parse_json_map(exercise_stars)
+    names_by_theme = theme_exercise_names or {}
+
     result = []
 
     for course in courses:
@@ -289,15 +406,20 @@ async def build_classroom_tree(
             else:
                 lesson_icon = "zmdi zmdi-folder"
 
+            lesson_exercise_names: list[str] = []
+            for theme in lesson_themes:
+                lesson_exercise_names.extend(names_by_theme.get(theme["name"], []))
+
             lesson_dict = {
                 "name": lesson["name"],
                 "title": lesson["title"],
-                # "is_open": False,
+                "kind": "lesson",
                 "open_class": lesson_open_class,
                 "is_clickable": lesson_clickable,
                 "is_completed": lesson_completed,
                 "is_current": lesson_current,
                 "is_available": lesson_clickable,
+                "stars": aggregate_stars(lesson_exercise_names, stars_map),
                 "icon_class": lesson_icon,
                 "extra_classes": " ".join(lesson_extra_classes),
                 "themes": []
@@ -327,16 +449,18 @@ async def build_classroom_tree(
 
                 # === Подсчёт статистики упражнений по уровням доступа ===
                 exercise_counts = await get_theme_exercise_counts(conn, theme["name"])
+                theme_names = names_by_theme.get(theme["name"], [])
 
                 theme_dict = {
                     "name": theme["name"],
                     "title": theme["title"],
                     "pos": theme_pos,
-                    # "is_open": False,
+                    "player": "vqt",
                     "is_clickable": theme_clickable,
                     "is_completed": is_completed,
                     "is_current": is_current,
                     "is_available": theme_clickable,
+                    "stars": aggregate_stars(theme_names, stars_map),
                     "icon_class": theme_icon,
                     "extra_classes": " ".join(theme_extra_classes),
                     "exercise_counts": exercise_counts,
@@ -350,34 +474,15 @@ async def build_classroom_tree(
             if str(b.get("after_lesson") or "").startswith(course["name"])
         ]
         course_dict["lessons"] = _insert_intensive_blocks(
-            course_dict["lessons"], course_blocks, intensive_progress
+            course_dict["lessons"],
+            course_blocks,
+            intensive_progress,
+            stars_map,
         )
 
         result.append(course_dict)
 
     return {"courses": result}
-
-
-async def _load_intensive_progress(conn, user_id: int | None) -> dict:
-    """Читает users.intensive_progress. Нет колонки или пользователя — пустой прогресс."""
-    if not user_id:
-        return {}
-    try:
-        row = await conn.fetchval(
-            "SELECT intensive_progress FROM users WHERE id = $1",
-            user_id,
-        )
-    except Exception:
-        return {}
-    if not row:
-        return {}
-    if isinstance(row, str):
-        try:
-            return json.loads(row)
-        except Exception as e:
-            print(e)
-            return {}
-    return dict(row) if isinstance(row, dict) else {}
 
 
 async def get_classroom_tree(
@@ -387,6 +492,7 @@ async def get_classroom_tree(
         target_exercise: str | None = None,
         user_id: int | None = None,
         intensive_progress: dict | None = None,
+        exercise_stars: dict | None = None,
 ) -> dict:
     """
     Получает из БД списки курсов, уроков, тем и формирует из них дерево,
@@ -471,7 +577,19 @@ async def get_classroom_tree(
         current_theme_name = current_theme["name"] if current_theme else None
 
         if intensive_progress is None:
-            intensive_progress = await _load_intensive_progress(conn, user_id)
+            intensive_progress = await load_user_json_field(conn, user_id, "intensive_progress")
+        else:
+            intensive_progress = _parse_json_map(intensive_progress)
+
+        if exercise_stars is None:
+            exercise_stars = await load_user_json_field(conn, user_id, "exercise_stars")
+        else:
+            exercise_stars = _parse_json_map(exercise_stars)
+
+        theme_exercise_names = await _load_theme_exercise_names(
+            conn,
+            [theme["name"] for theme in themes],
+        )
 
         tree = await build_classroom_tree(
             courses=courses,
@@ -482,6 +600,41 @@ async def get_classroom_tree(
             current_theme_name=current_theme_name,
             intensive_blocks=intensive_blocks,
             intensive_progress=intensive_progress,
+            exercise_stars=exercise_stars,
+            theme_exercise_names=theme_exercise_names,
         )
 
     return tree
+
+
+async def list_series_blocks(conn, series: str, lang_prefix: str | None = None) -> list[dict]:
+    series = (series or "X").upper()
+    if series not in {"X", "C"}:
+        series = "X"
+    if lang_prefix:
+        rows = await conn.fetch(
+            """
+            SELECT name, title, block_type, after_lesson, sort_order, file_name
+            FROM intensive_blocks
+            WHERE block_type = $1
+              AND after_lesson LIKE $2 || '%'
+            ORDER BY after_lesson, sort_order, name
+            """,
+            series, lang_prefix,
+        )
+    else:
+        rows = await conn.fetch(
+            """
+            SELECT name, title, block_type, after_lesson, sort_order, file_name
+            FROM intensive_blocks
+            WHERE block_type = $1
+            ORDER BY after_lesson, sort_order, name
+            """,
+            series,
+        )
+    blocks = []
+    for row in rows:
+        item = dict(row)
+        item["exercise_ids"] = _block_exercise_ids(item.get("file_name"))
+        blocks.append(item)
+    return blocks

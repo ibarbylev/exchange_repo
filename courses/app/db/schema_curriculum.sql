@@ -102,10 +102,10 @@ WHERE NOT EXISTS (SELECT 1 FROM courses);
 --  Узел дерева курса. Задания блока, их порядок и тела —
 --  в JSON, который загружается в память при старте.
 --
---  ⚠️ TODO комментарий ниже исправить после добавления полей в таблицу USER (там будут изменения!)
 --  Прогресс (таблица users, другая схема):
---    intensive_cursor       JSONB  -- {"block":"text_BGRUA1_04","exercise":"word_04_mc_01"}
---    intensive_block_scores JSONB  -- {"text_BGRUA1_04":100,"text_BGRUA1_05":80}
+--    current_exercise    VARCHAR  -- курсор интерактива
+--    intensive_progress  JSONB    -- курсоры параллельных веток {"X": "<exercise>", "C": "<exercise>"}
+--    exercise_stars      JSONB    -- качество {"<exercise>": 1|2|3}
 -- ============================================================
 CREATE TABLE IF NOT EXISTS intensive_blocks (
     name            VARCHAR(255) PRIMARY KEY,

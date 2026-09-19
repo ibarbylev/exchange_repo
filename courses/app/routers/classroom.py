@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -8,7 +9,16 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.db.dependencies import DBPoolDep, CurrentUser, RequiredUser
 from app.middleware.csrf import verify_csrf
-from app.repositories.classroom import get_classroom_tree
+from app.repositories.classroom import (
+    get_classroom_tree,
+    load_user_json_field,
+    list_series_blocks,
+    series_exercise_order,
+    cursor_rank,
+    _intensive_cursors,
+    _parse_json_map,
+    _star_value,
+)
 from app.routers.deps import LangPair, LangDep, render_template, render_template_string
 
 PLAYERS = {
@@ -97,6 +107,12 @@ def build_player_html(
         "is_available": theme.get("is_available", True),
         "is_completed": theme.get("is_completed", False),
         "is_current": theme.get("is_current", False),
+        "stars": theme.get("stars"),
+        "tree_status": theme.get("tree_status") or (
+            "completed" if theme.get("is_completed") else
+            "current" if theme.get("is_current") else
+            "locked" if not theme.get("is_clickable", True) else ""
+        ),
         "has_tariff_restrictions": has_tariff_restrictions(
             theme.get("exercise_counts"), access_level
         ),
@@ -208,7 +224,8 @@ async def classroom_intensive_block(
         )
     if not row:
         return JSONResponse({"error": f"Блок не найден: {block_name}"}, status_code=404)
-    if (row["block_type"] or "X").upper() != "X":
+    series = (row["block_type"] or "X").upper()
+    if series != "X":
         return JSONResponse({"error": "Этот блок не Text Intensive"}, status_code=400)
 
     from app.text_lab import storage as text_lab_storage
@@ -216,6 +233,44 @@ async def classroom_intensive_block(
         pack = text_lab_storage.load_block_file(row["file_name"])
     except FileNotFoundError as exc:
         return JSONResponse({"error": str(exc)}, status_code=404)
+
+    user_id = None
+    if current_user:
+        user_id = current_user.get("user_id") or current_user.get("id")
+
+    intensive_progress = _parse_json_map(
+        current_user.get("intensive_progress") if current_user else None
+    )
+    exercise_stars = _parse_json_map(
+        current_user.get("exercise_stars") if current_user else None
+    )
+    async with pool.acquire() as conn:
+        if not intensive_progress:
+            intensive_progress = await load_user_json_field(conn, user_id, "intensive_progress")
+        if not exercise_stars:
+            exercise_stars = await load_user_json_field(conn, user_id, "exercise_stars")
+
+        blocks = await list_series_blocks(conn, series)
+
+    cursors = _intensive_cursors(intensive_progress)
+    cursor = cursors.get(series)
+    block_names = [b["name"] for b in blocks]
+    try:
+        this_index = block_names.index(row["name"])
+    except ValueError:
+        this_index = 0
+    cursor_block_index = 0
+    if cursor:
+        for idx, block in enumerate(blocks):
+            if cursor == block["name"] or cursor in (block.get("exercise_ids") or []):
+                cursor_block_index = idx
+                break
+    if this_index < cursor_block_index:
+        tree_status = "completed"
+    elif this_index == cursor_block_index:
+        tree_status = "current"
+    else:
+        tree_status = "locked"
 
     return {
         "name": row["name"],
@@ -227,6 +282,11 @@ async def classroom_intensive_block(
         "audio_url": pack.get("audio_url"),
         "transcript": pack.get("transcript") or "",
         "exercises": pack.get("exercises") or [],
+        "series": series,
+        "tree_status": tree_status,
+        "current_exercise": cursor,
+        "exercise_stars": exercise_stars,
+        "intensive_progress": intensive_progress,
     }
 
 
@@ -320,6 +380,8 @@ async def get_classroom(
             "current_page": "classroom",
             "tree": tree_data,
             "current_exercise": target_exercise,
+            "intensive_progress": current_user.get("intensive_progress") if current_user else {},
+            "exercise_stars": current_user.get("exercise_stars") if current_user else {},
             "access_level": user_access_level,
             "access_level_name": access_names.get(user_access_level),
             "access_until": current_user.get("access_until"),
@@ -530,6 +592,94 @@ async def save_current_exercise(
 
     except Exception as e:
         print(f"[BACKEND] ОШИБКА при UPDATE: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def _user_pk(current_user: dict | None) -> int | None:
+    if not current_user:
+        return None
+    value = current_user.get("user_id") or current_user.get("id")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+@router.post("/api/user/exercise-stars")
+async def save_exercise_stars(
+    pool: DBPoolDep,
+    current_user: CurrentUser,
+    exercise_name: str = Body(..., embed=True),
+    stars: int = Body(..., embed=True),
+):
+    """Пишет качество упражнения. На сервере всегда max(old, new)."""
+    user_id = _user_pk(current_user)
+    if not user_id:
+        return {"success": False}
+    exercise_name = (exercise_name or "").strip()
+    new_stars = _star_value(stars)
+    if not exercise_name or new_stars is None:
+        return {"success": False, "error": "invalid stars"}
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchval(
+                "SELECT exercise_stars FROM users WHERE id = $1",
+                user_id,
+            )
+            current = _parse_json_map(row)
+            old = _star_value(current.get(exercise_name)) or 0
+            current[exercise_name] = max(old, new_stars)
+            await conn.execute(
+                "UPDATE users SET exercise_stars = $1::jsonb WHERE id = $2",
+                json.dumps(current, ensure_ascii=False),
+                user_id,
+            )
+        return {"success": True, "stars": current[exercise_name]}
+    except Exception as e:
+        print(f"[BACKEND] ОШИБКА при UPDATE exercise_stars: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/api/user/intensive-progress")
+async def save_intensive_progress(
+    pool: DBPoolDep,
+    current_user: CurrentUser,
+    exercise_name: str = Body(..., embed=True),
+    series: str = Body("X", embed=True),
+):
+    """Двигает курсор серии X или C только вперёд."""
+    user_id = _user_pk(current_user)
+    if not user_id:
+        return {"success": False}
+    series = (series or "X").upper()
+    if series not in {"X", "C"}:
+        return {"success": False, "error": "invalid series"}
+    exercise_name = (exercise_name or "").strip()
+    if not exercise_name:
+        return {"success": False, "error": "empty exercise"}
+    try:
+        async with pool.acquire() as conn:
+            progress = await load_user_json_field(conn, user_id, "intensive_progress")
+            cursors = _intensive_cursors(progress)
+            blocks = await list_series_blocks(conn, series)
+            order = series_exercise_order(blocks)
+            old_rank = cursor_rank(order, cursors.get(series))
+            new_rank = cursor_rank(order, exercise_name)
+            if new_rank < 0:
+                return {"success": False, "error": "unknown exercise"}
+            if new_rank > old_rank:
+                progress[series] = exercise_name
+                await conn.execute(
+                    "UPDATE users SET intensive_progress = $1::jsonb WHERE id = $2",
+                    json.dumps(progress, ensure_ascii=False),
+                    user_id,
+                )
+            return {
+                "success": True,
+                "intensive_progress": _intensive_cursors(progress),
+            }
+    except Exception as e:
+        print(f"[BACKEND] ОШИБКА при UPDATE intensive_progress: {e}")
         return {"success": False, "error": str(e)}
 
 
