@@ -134,10 +134,10 @@
 </div>
 </div>
 
-<script data-player-script="classroom-player-vqt-js-4">
+<script data-player-script="classroom-player-vqt-js-5">
 (function () {
-    if (window.__classroomVqtReady4) return;
-    window.__classroomVqtReady4 = true;
+    if (window.__classroomVqtReady5) return;
+    window.__classroomVqtReady5 = true;
 
     let currentExerciseData = null;
     let currentTestState = {
@@ -148,6 +148,46 @@
     function contentRoot() {
         return document.getElementById('commonPlayerContent')
             || document.getElementById('contentSlot');
+    }
+
+    function dbg() {
+        const args = Array.prototype.slice.call(arguments);
+        if (window.Classroom && Classroom.debug && Classroom.debug.log) {
+            Classroom.debug.log.apply(Classroom.debug, args);
+        } else {
+            console.log.apply(console, ['[VQT]'].concat(args));
+        }
+    }
+
+    function persistCurrentExercise(name) {
+        if (!name) return;
+        dbg('POST /api/user/current-exercise', name);
+        fetch('/api/user/current-exercise', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ exercise_name: name })
+        }).catch(function (err) {
+            dbg('current-exercise failed', err);
+        });
+    }
+
+    function persistStars(name, stars) {
+        if (!name || !stars) return;
+        dbg('POST /api/user/exercise-stars', name, stars);
+        fetch('/api/user/exercise-stars', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ exercise_name: name, stars: stars })
+        }).catch(function (err) {
+            dbg('exercise-stars failed', err);
+        });
+    }
+
+    function testStarsFromMistakes(mistakes) {
+        if (mistakes <= 0) return 3;
+        if (mistakes === 1) return 2;
+        if (mistakes === 2) return 1;
+        return 0;
     }
 
     function updateHeader(data) {
@@ -468,6 +508,7 @@
         highlightActiveSlot();
         const slots = document.querySelectorAll('.answer-slot');
         if ([].every.call(slots, function (s) { return s.classList.contains('filled'); })) {
+            persistStars(currentExerciseData.name, 3);
             playUrlQueue(answerAudioUrls(currentExerciseData), function () {
                 setTimeout(goToNextQ, 800);
             });
@@ -535,10 +576,49 @@
 
     function finishTest() {
         const container = contentRoot();
+        const data = currentExerciseData || {};
         const mistakes = currentTestState.mistakes;
-        if (mistakes < 3) {
+        const passed = mistakes < 3;
+        const nextTheme = data.nextThemeName || null;
+        const nextExercise = data.nextThemeFirstExercise || null;
+
+        dbg('finishTest', {
+            theme: data.themeName,
+            exercise: data.name,
+            mistakes: mistakes,
+            passed: passed,
+            nextThemeName: nextTheme,
+            nextThemeFirstExercise: nextExercise,
+            currentTIndex: data.currentTIndex,
+            tCount: data.themeTExercises ? data.themeTExercises.length : 0
+        });
+
+        if (passed) {
+            const stars = testStarsFromMistakes(mistakes);
+            (data.themeTExercises || []).forEach(function (ex) {
+                persistStars(ex.name, stars);
+            });
             container.insertAdjacentHTML('beforeend',
-                '<div class="alert alert-success mt-3"><strong>Тест пройден!</strong> Ошибок: ' + mistakes + '</div>');
+                '<div class="alert alert-success mt-3"><strong>Тест пройден!</strong> Ошибок: ' +
+                mistakes + '. Переход к следующей теме...</div>');
+            if (nextExercise) persistCurrentExercise(nextExercise);
+            if (nextTheme) {
+                setTimeout(function () {
+                    dbg('load next theme after test', { nextTheme: nextTheme, nextExercise: nextExercise });
+                    if (window.Classroom && Classroom.players) {
+                        Classroom.players.load({
+                            theme: nextTheme,
+                            view: 'exercise',
+                            exercise: nextExercise || '',
+                            player: 'vqt'
+                        });
+                    } else {
+                        dbg('Classroom.players недоступен, переход отменён');
+                    }
+                }, 2000);
+            } else {
+                dbg('следующая тема не найдена в ответе API');
+            }
         } else {
             container.insertAdjacentHTML('beforeend',
                 '<div class="alert alert-danger mt-3"><strong>Тест не сдан.</strong> Ошибок: ' + mistakes + '</div>');
@@ -577,8 +657,10 @@
         next.disabled = blockType === 'T';
         toTest.disabled = blockType === 'T';
         next.onclick = function () {
-            if (blockType === 'V') completeCurrentBlock();
-            else if (blockType === 'Q') goToNextQ();
+            if (blockType === 'V') {
+                if (currentExerciseData) persistStars(currentExerciseData.name, 3);
+                completeCurrentBlock();
+            } else if (blockType === 'Q') goToNextQ();
         };
         toTest.onclick = goToFirstTestBlock;
         prev.onclick = function () {
@@ -591,10 +673,12 @@
     Classroom.modes = Classroom.modes || {};
     Classroom.modes.vqt = {
         async init(opts) {
+            dbg('vqt.init', opts);
             if (!opts || opts.view !== 'exercise') return;
             const themeName = opts.theme;
             const res = await fetch('/api/theme/' + themeName + '/exercises');
             const blocks = res.ok ? await res.json() : [];
+            dbg('theme blocks', { themeName: themeName, blocks: blocks, ok: res.ok });
             Classroom.state = Classroom.state || {};
             Classroom.state.currentTheme = { name: themeName, blocks: blocks || [], currentIndex: 0 };
             if (opts.exercise) {

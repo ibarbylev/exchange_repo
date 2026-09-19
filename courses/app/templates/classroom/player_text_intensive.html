@@ -63,7 +63,9 @@
         border-top: 1px solid #c5e1a5;
     }
     .ti-current-line {
-        display: block;
+        display: flex;
+        align-items: center;
+        gap: 8px;
         width: 100%;
         padding: 10px 18px 4px;
         font-weight: 600;
@@ -132,11 +134,42 @@
     .ti-toc-item.active .ti-toc-num { color: #1565c0; }
     .ti-toc-title { flex: 1 1 auto; min-width: 0; }
     .ti-toc-stars {
-        margin-left: auto;
-        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 3.4em;
+        min-width: 3.4em;
+        flex: 0 0 3.4em;
         color: #f9a825;
         letter-spacing: 1px;
-        font-size: 0.82rem;
+        font-size: 0.9rem;
+        line-height: 1;
+        text-align: center;
+    }
+    .ti-celebrate {
+        position: fixed;
+        inset: 0;
+        z-index: 2200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(20, 32, 44, 0.45);
+    }
+    .ti-celebrate-card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 28px 36px;
+        text-align: center;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.22);
+        max-width: 440px;
+        width: calc(100% - 32px);
+    }
+    .ti-celebrate-stars {
+        color: #f9a825;
+        font-size: 1.8rem;
+        letter-spacing: 4px;
+        min-height: 1.2em;
+        margin-bottom: 8px;
     }
     .ti-toc-item.locked {
         opacity: 0.42;
@@ -204,10 +237,10 @@
 </div>
 </div>
 
-<script data-player-script="classroom-player-ti-js-play">
+<script data-player-script="classroom-player-ti-js-play-2">
 (function () {
-    if (window.__classroomTiPlayReady) return;
-    window.__classroomTiPlayReady = true;
+    if (window.__classroomTiPlayReady2) return;
+    window.__classroomTiPlayReady2 = true;
 window.TextLab = {
 
     exercises: [],
@@ -271,9 +304,49 @@ window.TextLab = {
     },
 
     starsMarkup(count) {
-        const n = Number(count) || 0;
-        if (n < 1) return '';
-        return '★'.repeat(n) + '☆'.repeat(Math.max(0, 3 - n));
+        const n = Math.max(0, Math.min(3, Number(count) || 0));
+        return n > 0 ? '★'.repeat(n) : '';
+    },
+
+    scorePercent(meta) {
+        const parsed = this.parseScore(meta);
+        if (!parsed || !parsed.total) return null;
+        return Math.round(100 * Number(parsed.correct) / Number(parsed.total));
+    },
+
+    hideCompletionOverlay() {
+        const el = document.getElementById('tiCelebrate');
+        if (el) el.remove();
+    },
+
+    showCompletionOverlay(percent, stars) {
+        this.hideCompletionOverlay();
+        const wrap = document.createElement('div');
+        wrap.id = 'tiCelebrate';
+        wrap.className = 'ti-celebrate';
+        const starsHtml = this.starsMarkup(stars);
+        const percentHtml = (percent == null)
+            ? '<p class="mb-0">Упражнение завершено.</p>'
+            : '<p class="mb-0">Упражнение выполнено на <strong>' + percent + '%</strong></p>';
+        wrap.innerHTML =
+            '<div class="ti-celebrate-card">' +
+                (starsHtml ? '<div class="ti-celebrate-stars">' + starsHtml + '</div>' : '') +
+                '<h4 class="mb-2">Поздравляем!</h4>' +
+                percentHtml +
+            '</div>';
+        document.body.appendChild(wrap);
+    },
+
+    scheduleNextAfterDone() {
+        const i = this.currentIndex();
+        const next = (i >= 0) ? this.exercises[i + 1] : null;
+        if (this._advanceTimer) clearTimeout(this._advanceTimer);
+        this._advanceTimer = setTimeout(() => {
+            this.hideCompletionOverlay();
+            if (next && this.exerciseState(i + 1) !== 'locked') {
+                this.loadExercise(next.id, { collapseToc: false });
+            }
+        }, 2000);
     },
 
     cursorIndex() {
@@ -327,8 +400,10 @@ window.TextLab = {
         this.saveProgress();
 
         const parsed = this.parseScore(meta);
+        const percent = this.scorePercent(meta);
+        let stars = 0;
         if (parsed && parsed.total) {
-            const stars = this.starsFromRatio(parsed.correct, parsed.total);
+            stars = this.starsFromRatio(parsed.correct, parsed.total);
             if (stars) this.persistStars(this.currentId, stars);
         }
 
@@ -342,6 +417,8 @@ window.TextLab = {
         }
         this.renderToc();
         this.updateNav();
+        this.showCompletionOverlay(percent, stars);
+        this.scheduleNextAfterDone();
     },
 
     doneCount() {
@@ -412,7 +489,10 @@ window.TextLab = {
             return;
         }
         const name = this.exerciseDisplayName(ex, i);
-        el.textContent = (i >= 0 ? ((i + 1) + '. ') : '') + name;
+        const stars = this.starsMarkup(this.stars[ex.id]);
+        el.innerHTML =
+            '<span class="ti-toc-stars">' + stars + '</span>' +
+            '<span>' + (i >= 0 ? ((i + 1) + '. ') : '') + name + '</span>';
         el.title = name;
     },
 
@@ -447,8 +527,8 @@ window.TextLab = {
                 ' data-exercise-id="' + ex.id + '"' + action + '>' +
                 '<span class="ti-toc-mark">' + mark + '</span>' +
                 '<span class="ti-toc-num">' + (idx + 1) + '.</span>' +
+                '<span class="ti-toc-stars">' + stars + '</span>' +
                 '<span class="ti-toc-title">' + title + '</span>' +
-                (stars ? '<span class="ti-toc-stars">' + stars + '</span>' : '') +
                 '</button>'
             );
         }).join('');

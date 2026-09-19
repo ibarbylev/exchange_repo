@@ -521,7 +521,7 @@ async def get_exercise(
 
             current_t_index = next((i for i, ex in enumerate(t_exercises) if ex["name"] == exercise_name), 0)
 
-            # Следующая тема → первое V (или первое упражнение)
+            # Следующая тема: сначала в том же уроке, затем по глобальному pos
             next_theme_row = await conn.fetchrow("""
                 SELECT name FROM themes
                 WHERE lesson_name = (
@@ -530,16 +530,32 @@ async def get_exercise(
                   AND pos > (SELECT pos FROM themes WHERE name = $1)
                 ORDER BY pos LIMIT 1
             """, theme_name)
+            if not next_theme_row:
+                next_theme_row = await conn.fetchrow("""
+                    SELECT name FROM themes
+                    WHERE pos > (SELECT pos FROM themes WHERE name = $1)
+                    ORDER BY pos LIMIT 1
+                """, theme_name)
 
+            next_theme_name = next_theme_row["name"] if next_theme_row else None
             next_theme_first_v = None
-            if next_theme_row:
+            if next_theme_name:
                 next_theme_first_v = await conn.fetchval("""
                     SELECT name FROM exercises
                     WHERE theme_name = $1
                       AND exercise_type = 'V'
                       AND $2 = ANY(visibility)
                     ORDER BY pos LIMIT 1
-                """, next_theme_row["name"], user_access_level)
+                """, next_theme_name, user_access_level)
+                if not next_theme_first_v:
+                    next_theme_first_v = await conn.fetchval("""
+                        SELECT name FROM exercises
+                        WHERE theme_name = $1
+                          AND $2 = ANY(visibility)
+                        ORDER BY
+                            CASE exercise_type WHEN 'V' THEN 1 WHEN 'Q' THEN 2 WHEN 'T' THEN 3 ELSE 4 END, pos
+                        LIMIT 1
+                    """, next_theme_name, user_access_level)
 
             # Первое упражнение текущей темы (для ретейка)
             current_theme_first = await conn.fetchval("""
@@ -555,6 +571,7 @@ async def get_exercise(
                 "correctCombinations": parse_variants(row["answers"]) if row["answers"] else [],
                 "themeTExercises": [dict(ex) for ex in t_exercises],
                 "currentTIndex": current_t_index,
+                "nextThemeName": next_theme_name,
                 "nextThemeFirstExercise": next_theme_first_v,
                 "currentThemeFirstExercise": current_theme_first,
                 "mistakesAllowed": 3,

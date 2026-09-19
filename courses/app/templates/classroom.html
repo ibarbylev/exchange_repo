@@ -98,25 +98,41 @@
         padding: 18px 20px;
     }
 
-    .file-tree .completed span { color: #2e7d32; font-weight: 600; }
+    .file-tree .completed span:not(.tree-stars) { color: #2e7d32; font-weight: 600; }
     .file-tree .completed i { color: #4caf50; }
     .file-tree .current i { color: #1565c0; }
     .file-tree .theme-node.completed .node-header:hover { background-color: #c8e6c9; }
     .file-tree .locked { opacity: 0.50; }
-    .file-tree .locked span { color: #6c757d; }
+    .file-tree .locked span:not(.tree-stars) { color: #6c757d; }
     .file-tree .locked .node-header { cursor: not-allowed; }
     .file-tree .locked .node-header:hover { background: transparent; }
 
     .file-tree .intensive-block.submitted i { color: #ef6c00; }
-    .file-tree .intensive-block.submitted span { color: #e65100; font-weight: 600; }
+    .file-tree .intensive-block.submitted span:not(.tree-stars) { color: #e65100; font-weight: 600; }
     .file-tree .intensive-x.current i { color: #1565c0; }
     .file-tree .intensive-c.current i { color: #00838f; }
 
-    .tree-node.theme-node.current > .node-header span,
-    .tree-node.current:not(.theme-node) > .node-header span {
+    .tree-node.theme-node.current > .node-header span:not(.tree-stars),
+    .tree-node.current:not(.theme-node) > .node-header span:not(.tree-stars) {
         color: #1565c0;
         font-weight: 600;
         background-color: #e3f2fd;
+    }
+
+    .node-header .node-title { flex: 1 1 auto; min-width: 0; }
+    .tree-stars {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 3.4em;
+        min-width: 3.4em;
+        flex: 0 0 3.4em;
+        margin: 0 6px 0 0;
+        color: #f9a825;
+        font-size: 0.85rem;
+        letter-spacing: 1px;
+        line-height: 1;
+        text-align: center;
     }
 
     .btn-auto-fit { width: auto !important; }
@@ -178,7 +194,8 @@
                         <div class="node-header">
                             <i class="zmdi zmdi-chevron-right toggle-icon"></i>
                             <i class="zmdi zmdi-folder text-warning mx-2"></i>
-                            <span>{{ course.title }}</span>
+                            <span class="tree-stars"></span>
+                            <span class="node-title">{{ course.title }}</span>
                         </div>
                         <div class="children">
                             {% for lesson in course.lessons %}
@@ -189,7 +206,8 @@
                                  data-player="{{ lesson.player | default('text_intensive') }}">
                                 <div class="node-header">
                                     <i class="{{ lesson.icon_class }} me-1 mx-2"></i>
-                                    <span>{{ lesson.title }}</span>
+                                    <span class="tree-stars">{% if lesson.stars %}{{ "★" * lesson.stars }}{% endif %}</span>
+                                    <span class="node-title">{{ lesson.title }}</span>
                                 </div>
                             </div>
                             {% else %}
@@ -198,7 +216,8 @@
                                 <div class="node-header">
                                     <i class="zmdi zmdi-chevron-right toggle-icon"></i>
                                     <i class="{{ lesson.icon_class }} me-1 mx-2"></i>
-                                    <span>{{ lesson.title }}</span>
+                                    <span class="tree-stars">{% if lesson.stars %}{{ "★" * lesson.stars }}{% endif %}</span>
+                                    <span class="node-title">{{ lesson.title }}</span>
                                 </div>
                                 <div class="children">
                                     {% for theme in lesson.themes %}
@@ -208,7 +227,8 @@
                                         <div class="node-header">
                                             <i class="zmdi zmdi-chevron-right toggle-icon"></i>
                                             <i class="{{ theme.icon_class }} me-1 mx-2"></i>
-                                            <span>{{ theme.title }}</span>
+                                            <span class="tree-stars">{% if theme.stars %}{{ "★" * theme.stars }}{% endif %}</span>
+                                            <span class="node-title">{{ theme.title }}</span>
                                         </div>
                                     </div>
                                     {% endfor %}
@@ -279,8 +299,9 @@
             const tree = Classroom.data.tree || window.treeData;
             if (!tree || !tree.courses) return null;
             for (const course of tree.courses) {
-                for (const lesson of course.lessons) {
-                    for (const theme of lesson.themes) {
+                for (const lesson of course.lessons || []) {
+                    if (lesson.kind === 'intensive' && lesson.name === themeName) return lesson;
+                    for (const theme of lesson.themes || []) {
                         if (theme.name === themeName) return theme;
                     }
                 }
