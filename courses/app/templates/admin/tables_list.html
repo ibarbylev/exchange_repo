@@ -1,0 +1,141 @@
+{% extends "admin/admin_base_page.html" %}
+
+{% block title %}Админка — {{ current_table }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- SIDEBAR -->
+    <div class="col-md-3 col-lg-2">
+        <div class="card shadow-sm">
+            <div class="card-header bg-dark text-white">
+                <strong>Таблицы</strong>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for table in tables %}
+                <a href="/admin/{{ table }}/"
+                   class="list-group-item list-group-item-action {% if table == current_table %}active{% endif %}">
+                    {{ table }}
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="col-md-9 col-lg-10">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="h3 mb-0">Таблица: <strong>{{ current_table }}</strong></h1>
+            <span class="badge bg-secondary fs-6">{{ total }} записей</span>
+        </div>
+
+        <!-- Фильтры -->
+        <div class="card mb-4 shadow-sm">
+            <div class="card-body">
+                <form id="filterForm" class="row g-3 align-items-end">
+                    <div id="filters-container"></div>
+
+                    <div class="col-auto">
+                        <button type="button" id="add-filter" class="btn btn-outline-primary">
+                            <i class="bi bi-plus-lg"></i> Добавить фильтр
+                        </button>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-success">Найти</button>
+                    </div>
+                    <div class="col-auto">
+                        <a href="/admin/{{ current_table }}/" class="btn btn-outline-secondary">Сбросить</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Таблица -->
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                {% for col in columns %}
+                                <th>{{ col['column_name'] }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in data %}
+                            <tr>
+                                {% for col in columns %}
+                                <td>{{ row[col['column_name']] | default('—') }}</td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Пагинация -->
+        {% if total_pages > 1 %}
+        <nav class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if page > 1 %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page-1 }}&per_page={{ per_page }}">← Предыдущая</a>
+                </li>
+                {% endif %}
+
+                {% for p in range(1, total_pages + 1) %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="?page={{ p }}&per_page={{ per_page }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+
+                {% if page < total_pages %}
+                <li class="page-item">
+                    <a class="page-link" href="?page={{ page+1 }}&per_page={{ per_page }}">Следующая →</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Ваш существующий JavaScript для фильтров остаётся здесь без изменений
+    let filterIndex = 0;
+
+    function addFilterRow() {
+        const container = document.getElementById('filters-container');
+        const row = document.createElement('div');
+        row.className = 'row g-3 mb-2 filter-row';
+        row.innerHTML = `
+            <div class="col-md-5">
+                <select class="form-select" name="f${filterIndex}_field">
+                    {% for col in columns %}
+                    <option value="{{ col['column_name'] }}">{{ col['column_name'] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-5">
+                <input type="text" class="form-control" name="f${filterIndex}_value" placeholder="Значение">
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-outline-danger btn-sm w-100 remove-filter">×</button>
+            </div>
+        `;
+        container.appendChild(row);
+        filterIndex++;
+
+        row.querySelector('.remove-filter').addEventListener('click', () => row.remove());
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        addFilterRow();
+        document.getElementById('add-filter').addEventListener('click', addFilterRow);
+    });
+</script>
+{% endblock %}

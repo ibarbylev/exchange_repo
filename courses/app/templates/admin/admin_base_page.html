@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Админ-панель{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .admin-navbar {
+            background-color: #212529;
+            box-shadow: 0 2px 4px rgba(0,0,0,.1);
+        }
+        .admin-navbar .nav-link {
+            color: #dee2e6;
+            padding: 0.75rem 1rem;
+        }
+        .admin-navbar .nav-link:hover,
+        .admin-navbar .nav-link.active {
+            color: #fff;
+            background-color: #495057;
+            border-radius: 6px;
+        }
+    </style>
+    {% block extra_head %}    {% endblock %}
+</head>
+<body>
+
+<!-- ГОРИЗОНТАЛЬНОЕ МЕНЮ -->
+<nav class="navbar navbar-expand-lg admin-navbar">
+    <div class="container-fluid">
+
+        {% if request.cookies.get('flash', '').startswith('impersonate_success:') %}
+            {% set name = request.cookies.get('flash').split(':', 1)[1] %}
+            <div class="alert alert-info alert-dismissible fade show" role="alert">
+                Вы вошли под пользователем <strong>{{ name }}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endif %}
+
+        <a class="navbar-brand text-white fw-bold" href="/admin/">Админ-панель</a>
+
+        <div class="collapse navbar-collapse" id="adminNavbar">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.url.path.startswith('/admin/tables') %}active{% endif %}"
+                       href="/admin/tables/">
+                        <i class="bi bi-table me-1"></i> Список таблиц
+                    </a>
+                </li>
+
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle {% if request.url.path.startswith('/admin/access') or request.url.path.startswith('/admin/gift-access') %}active{% endif %}"
+                       href="#"
+                       id="accessDropdown"
+                       role="button"
+                       data-bs-toggle="dropdown"
+                       aria-expanded="false">
+                        <i class="bi bi-person-gear me-1"></i> Изменение доступа
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-dark" aria-labelledby="accessDropdown">
+                        <li>
+                            <a class="dropdown-item {% if request.url.path == '/admin/access/' %}active{% endif %}"
+                               href="/admin/access/">
+                                Изменение существующего доступа
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item {% if request.url.path == '/admin/gift-access/' %}active{% endif %}"
+                               href="/admin/gift-access/">
+                                Подарок доступа от админа
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="/admin/impersonate/">Войти под пользователем</a>
+                        </li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="/admin/manual-payment/" class="nav-link">
+                        <i class="bi bi-credit-card me-2"></i> Ручная оплата
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/user-role-change/"
+                       class="nav-link {% if request.url.path.startswith('/admin/user-role-change') %}active{% endif %}">
+                        <i class="bi bi-person-gear me-2"></i>Изменение роли
+                    </a>
+                </li>
+                <li>
+                    <a href="/admin/coach-student-schedule/"
+                       class="nav-link {% if request.url.path.startswith('/admin/coach-student-schedule') %}active{% endif %}">
+                        <i class="bi bi-calendar-week me-2"></i>Расписание коуча
+                    </a>
+                </li>
+
+                <!-- Удалить ----------------------------->
+                <li>
+                    <a href="/bg/ru/coach/" class="nav-link">
+                        <i class="bi bi-easel me-2"></i>Кабинет коуча
+                    </a>
+                </li>
+
+
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- ОСНОВНОЙ КОНТЕНТ -->
+<main class="container-fluid py-4">
+    {% block content %}      {% endblock %}
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block extra_scripts %}    {% endblock %}
+</body>
+</html>
