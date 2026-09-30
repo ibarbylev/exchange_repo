@@ -276,8 +276,11 @@ def interactive_theme_stars(
     return aggregate_stars(test_names, mapping)
 
 
-def _block_exercise_ids(file_name: str | None) -> list[str]:
+def _block_exercise_ids(file_name: str | None, block_type: str | None = None) -> list[str]:
+    """Id упражнений из JSON-каталога. Для C каталог не спрашиваем."""
     if not file_name:
+        return []
+    if (block_type or "").upper() == "C":
         return []
     return get_exercise_ids(file_name)
 
@@ -426,7 +429,10 @@ def _insert_intensive_blocks(
         block = dict(raw)
         block_type = (block.get("block_type") or "X").upper()
         block["block_type"] = block_type
-        block["exercise_ids"] = _block_exercise_ids(block.get("file_name"))
+        if block_type == "C":
+            block["exercise_ids"] = []
+        else:
+            block["exercise_ids"] = _block_exercise_ids(block.get("file_name"), block_type)
         prepared.append(block)
         by_after[block["after_lesson"]].append(block)
     for group in by_after.values():
@@ -470,7 +476,10 @@ def series_exercise_order(blocks: list[dict]) -> list[tuple[str, str]]:
     order: list[tuple[str, str]] = []
     for block in blocks:
         name = block.get("name")
-        ids = block.get("exercise_ids") or _block_exercise_ids(block.get("file_name"))
+        ids = block.get("exercise_ids") or _block_exercise_ids(
+            block.get("file_name"),
+            block.get("block_type"),
+        )
         if ids:
             for exercise_id in ids:
                 order.append((name, exercise_id))

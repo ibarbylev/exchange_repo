@@ -9,6 +9,9 @@
 
 Публичный URL:
     /media/audio/{course}/{audio_name}.mp3
+
+Каталог — только для блоков X. HTML-проекторы C в JSON не ищем.
+Загрузка с диска — один раз в lifespan при старте воркера.
 """
 
 from __future__ import annotations
@@ -71,6 +74,18 @@ def get_audio_url(course: str, audio_name: str | None) -> str | None:
     return f"{MEDIA_AUDIO_URL_PREFIX}/{course}/{name}.mp3"
 
 
+def _catalog_key(file_name: str | None) -> str:
+    """Stem имени блока без пути и суффикса .json/.html."""
+    name = (file_name or "").strip()
+    name = name.rsplit("/", 1)[-1]
+    lower = name.lower()
+    if lower.endswith(".json"):
+        name = name[:-5]
+    elif lower.endswith(".html"):
+        name = name[:-5]
+    return name.strip()
+
+
 def _normalize_block(file_name: str, data: dict[str, Any]) -> dict[str, Any]:
     name = file_name.removesuffix(".json").strip()
     data.setdefault("course", name.split("_")[0] if "_" in name else "")
@@ -90,7 +105,7 @@ def _normalize_block(file_name: str, data: dict[str, Any]) -> dict[str, Any]:
 
 
 def load_catalog() -> int:
-    """Читает все JSON блоков в память. Возвращает число загруженных файлов."""
+    """Читает JSON блоков в память. Вызывается из lifespan при старте."""
     _BLOCKS.clear()
     if not DATA_DIR.exists():
         print(f"→ Intensive catalog: directory not found: {DATA_DIR}")
@@ -119,16 +134,10 @@ def load_catalog() -> int:
 
 def get_block(file_name: str) -> dict[str, Any]:
     """Пакет блока из каталога в памяти. Копия, чтобы не менять кэш."""
-    name = (file_name or "").removesuffix(".json").strip()
-    name = name.rsplit("/", 1)[-1]
+    name = _catalog_key(file_name)
     if not name:
         raise FileNotFoundError("file_name пустой")
     pack = _BLOCKS.get(name)
-
-    if pack is None:
-        load_catalog()
-        pack = _BLOCKS.get(name)
-
     if pack is None:
         raise FileNotFoundError(f"Нет файла блока: {name}.json")
     result = dict(pack)
@@ -138,12 +147,15 @@ def get_block(file_name: str) -> dict[str, Any]:
 
 
 def get_exercise_ids(file_name: str) -> list[str]:
-    """Id упражнений блока. Пустой список, если файла нет в каталоге."""
-    try:
-        pack = get_block(file_name)
-    except FileNotFoundError:
+    """Id упражнений блока X. Пустой список, если ключа нет в каталоге."""
+    name = _catalog_key(file_name)
+    if not name:
+        return []
+    pack = _BLOCKS.get(name)
+    if pack is None:
         return []
     return list(pack.get("exercise_ids") or [])
+
 
 def html_file_path(file_name: str):
     """Путь к HTML-проектору коуча."""
