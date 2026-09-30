@@ -282,54 +282,6 @@ async def mark_completed(
     return lesson
 
 
-async def advance_student_c_cursor(conn, student_id: int | None, lesson_name: str | None) -> None:
-    """Сдвигает курсор ветки C на следующий блок после закрытого урока.
-
-    Дерево студента для Coach Online строится и по этому курсору,
-    и по статусам coach_lessons. Курсор обновляем, чтобы ветки не расходились.
-    """
-    if not student_id or not lesson_name:
-        return
-
-    from app.repositories.classroom import (
-        lang_prefix_from_name,
-        list_series_blocks,
-        load_user_json_field,
-        migrate_intensive_progress,
-        series_exercise_order,
-        cursor_rank,
-        _intensive_cursors,
-    )
-
-    prefix = lang_prefix_from_name(lesson_name)
-    if not prefix:
-        return
-
-    blocks = await list_series_blocks(conn, "C", prefix)
-    names = [block.get("name") for block in blocks if block.get("name")]
-    if lesson_name not in names:
-        return
-    index = names.index(lesson_name)
-    next_name = names[index + 1] if index + 1 < len(names) else lesson_name
-
-    progress = await load_user_json_field(conn, student_id, "intensive_progress")
-    cursors = _intensive_cursors(progress, prefix)
-    order = series_exercise_order(blocks)
-    old_rank = cursor_rank(order, cursors.get("C"))
-    new_rank = cursor_rank(order, next_name)
-    if new_rank < 0:
-        return
-    if new_rank <= old_rank and old_rank >= 0:
-        return
-
-    progress = migrate_intensive_progress(progress, prefix, "C", next_name)
-    await conn.execute(
-        "UPDATE users SET intensive_progress = $1::jsonb WHERE id = $2",
-        json.dumps(progress, ensure_ascii=False),
-        student_id,
-    )
-
-
 async def find_student_lesson_for_block(conn, student_id: int, block_name: str) -> dict | None:
     row = await conn.fetchrow(
         LESSON_SELECT + """

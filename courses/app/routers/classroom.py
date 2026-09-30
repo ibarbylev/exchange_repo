@@ -742,14 +742,17 @@ async def save_intensive_progress(
     block_name: str | None = Body(None, embed=True),
     lang_prefix: str | None = Body(None, embed=True),
 ):
-    """Двигает курсор серии X или C только вперёд и только внутри языковой пары."""
+    """Двигает курсор Text Intensive (X) только вперёд и только внутри языковой пары.
+
+    Прогресс C этим методом не пишется: источник — coach_lessons.
+    """
     user_id = _user_pk(current_user)
 
     if not user_id:
         return {"success": False}
     series = (series or "X").upper()
 
-    if series not in {"X", "C"}:
+    if series != "X":
         return {"success": False, "error": "invalid series"}
 
     exercise_name = (exercise_name or "").strip()
@@ -780,7 +783,7 @@ async def save_intensive_progress(
             if new_rank < 0:
                 return {"success": False, "error": "unknown exercise"}
 
-            legacy_flat = any(key in _parse_json_map(progress) for key in ("X", "C"))
+            legacy_flat = "X" in _parse_json_map(progress)
             if new_rank > old_rank or legacy_flat:
                 progress = migrate_intensive_progress(
                     progress, prefix, series, exercise_name

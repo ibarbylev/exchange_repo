@@ -224,7 +224,7 @@ class TestCoachWebsocketProtocol:
         assert "чекбокса" in err["message"]
 
     @pytest.mark.asyncio
-    async def test_completed_lesson_rejects_checkbox(self, db_pool, create_user):
+    async def test_completed_lesson_closes_without_accept(self, db_pool, create_user):
         course = await _make_c_course(db_pool, n_blocks=1)
         student_id = await create_user(role="student")
         coach_id = await create_user(role="coach")
@@ -239,13 +239,9 @@ class TestCoachWebsocketProtocol:
             open_checkboxes=["intro", "q1", "q2"],
         )
         ws = FakeWebSocket(_ticket(coach_id, lesson_id, "coach"))
-        with patch("app.routers.coach.load_html_block", return_value=FAKE_HTML):
-            task = await _run_ws(ws, lesson_id)
-            await _wait_until(lambda: ws.sent)
-            assert ws.sent[0]["all_open"] is True
-            await ws.push({"type": "set_checkbox", "id": "q1", "open": False})
-            await _wait_until(lambda: any(item.get("type") == "error" for item in ws.sent))
-            await ws.push(None)
-            await task
-        err = next(item for item in ws.sent if item.get("type") == "error")
-        assert "закрыт" in err["message"]
+        task = await _run_ws(ws, lesson_id)
+        await _wait_until(lambda: ws.closed == 4403)
+        await task
+        assert ws.accepted is False
+        assert ws.sent == []
+        assert lesson_id not in hub.rooms or not hub.rooms[lesson_id]

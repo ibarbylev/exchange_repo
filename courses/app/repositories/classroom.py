@@ -106,15 +106,26 @@ def _series_cursor_value(raw: Any) -> str | None:
 
 
 def _legacy_flat_cursors(data: dict) -> dict[str, str]:
-    """Старый формат {"X": "...", "C": "..."} без ключа языковой пары."""
+    """Старый формат {"X": "..."} без ключа языковой пары."""
     result: dict[str, str] = {}
-    for series in ("X", "C"):
-        text = _series_cursor_value(data.get(series))
-        if text is None:
-            text = _series_cursor_value(data.get(series.lower()))
-        if text:
-            result[series] = text
+    text = _series_cursor_value(data.get("X"))
+    if text is None:
+        text = _series_cursor_value(data.get("x"))
+    if text:
+        result["X"] = text
     return result
+
+
+def _pair_without_c(value: Any) -> dict[str, Any]:
+    """Копия прогресса пары без ключа C — он больше не источник правды."""
+    if not isinstance(value, dict):
+        return {}
+    cleaned: dict[str, Any] = {}
+    for key, item in value.items():
+        if str(key or "").strip().upper() == "C":
+            continue
+        cleaned[key] = item
+    return cleaned
 
 
 def _intensive_cursors(
@@ -122,16 +133,17 @@ def _intensive_cursors(
         lang_prefix: str | None = None,
 ) -> dict[str, str | None]:
     """
-    intensive_progress по языковой паре:
+    intensive_progress по языковой паре — только курсор Text Intensive (X):
 
-        {"BGRU": {"X": "BGRUA1_text2_…", "C": null}}
+        {"BGRU": {"X": "BGRUA1_text2_…"}}
 
+    Прогресс C живёт в coach_lessons, ключ C в JSON не читаем.
     Пара появляется только после первого сохранения прогресса по ней.
-    Старый плоский вид {"X": "...", "C": "..."} читается как legacy:
+    Старый плоский вид {"X": "..."} читается как legacy:
     значение учитывается, только если имя курсора принадлежит этой паре.
     """
     data = _parse_json_map(progress)
-    result: dict[str, str | None] = {"X": None, "C": None}
+    result: dict[str, str | None] = {"X": None}
     prefix = (lang_prefix or "").strip().upper() or None
 
     pair = None
@@ -147,14 +159,13 @@ def _intensive_cursors(
     else:
         source = _legacy_flat_cursors(data)
 
-    for series in ("X", "C"):
-        text = _series_cursor_value(source.get(series))
-        if text is None:
-            text = _series_cursor_value(source.get(series.lower()))
-        if text and prefix and not text.upper().startswith(prefix):
-            if pair is None and lang_prefix_from_name(text):
-                text = None
-        result[series] = text or None
+    text = _series_cursor_value(source.get("X"))
+    if text is None:
+        text = _series_cursor_value(source.get("x"))
+    if text and prefix and not text.upper().startswith(prefix):
+        if pair is None and lang_prefix_from_name(text):
+            text = None
+    result["X"] = text or None
     return result
 
 
@@ -165,9 +176,9 @@ def migrate_intensive_progress(
         cursor: str,
 ) -> dict:
     """
-    Пишет курсор в прогресс пары. Другие пары не создаёт.
+    Пишет курсор Text Intensive (X) в прогресс пары. Другие пары не создаёт.
     Плоский legacy {"X": "..."} при первой записи раскладывает по префиксу
-    имени курсора, чтобы не потерять уже сохранённый прогресс.
+    имени курсора, чтобы не потерять уже сохранённый прогресс X.
     """
     data = _parse_json_map(progress)
     stored: dict[str, Any] = {}
@@ -175,10 +186,12 @@ def migrate_intensive_progress(
         key_text = str(key or "").strip().upper()
         if key_text in {"X", "C"} or not isinstance(value, dict):
             continue
-        stored[key_text] = dict(value)
+        stored[key_text] = _pair_without_c(value)
 
     prefix = (lang_prefix or "").strip().upper()
     for legacy_series, legacy_cursor in _legacy_flat_cursors(data).items():
+        if legacy_series != "X":
+            continue
         legacy_prefix = lang_prefix_from_name(legacy_cursor) or prefix
         if not legacy_prefix:
             continue
@@ -186,9 +199,11 @@ def migrate_intensive_progress(
         pair.setdefault(legacy_series, legacy_cursor)
 
     series = (series or "X").upper()
-    pair = stored.setdefault(prefix, {})
-    pair[series] = cursor
-    stored[prefix] = pair
+    if series != "X" or not prefix:
+        return stored
+    pair = stored.setdefault(prefix, _pair_without_c(stored.get(prefix)))
+    pair["X"] = cursor
+    stored[prefix] = _pair_without_c(pair)
     return stored
 
 
@@ -397,13 +412,12 @@ def _intensive_lesson_node(
     }
 
 
-def _first_open_c_index(blocks: list[dict], completed_names: set[str] | None) -> int | None:
-    """Индекс первого незакрытого C-блока. None — все закрыты или списка нет."""
-    if completed_names is None:
-        return None
+def _first_open_c_index(blocks: list[dict], completed_names: set[str] | None) -> int:
+    """Индекс первого незакрытого C-блока по coach_lessons. Нет записей — открыт первый."""
+    completed = completed_names or set()
     for index, block in enumerate(blocks):
         name = block.get("name")
-        if name and name not in completed_names:
+        if name and name not in completed:
             return index
     return len(blocks)
 
@@ -418,9 +432,9 @@ def _insert_intensive_blocks(
 ) -> list[dict]:
     """Вставляет блоки intensive после after_lesson.
 
-    X — курсор intensive_progress.
-    C — статусы coach_lessons (закрытый урок открывает следующий на дереве).
-    Если занятий коуча ещё нет, C ведёт себя как раньше: по курсору.
+    X — курсор users.intensive_progress.
+    C — только статусы coach_lessons. Курсор C в JSON не используем.
+    Нет закрытых занятий — на дереве открыт первый C-блок.
     """
     cursors = _intensive_cursors(progress, lang_prefix)
     by_after = defaultdict(list)
@@ -443,10 +457,7 @@ def _insert_intensive_blocks(
         for block in by_after.get(lesson["name"], []):
             ordered[block["block_type"]].append(block)
 
-    cursor_index = {
-        series: _cursor_series_index(items, cursors.get(series))
-        for series, items in ordered.items()
-    }
+    x_cursor_index = _cursor_series_index(ordered["X"], cursors.get("X"))
     first_open_c = _first_open_c_index(ordered["C"], coach_completed_names)
     seen = {"X": 0, "C": 0}
 
@@ -457,10 +468,10 @@ def _insert_intensive_blocks(
             block_type = block["block_type"]
             series_index = seen[block_type]
             seen[block_type] += 1
-            if block_type == "C" and first_open_c is not None:
+            if block_type == "C":
                 status, lock_reason = _series_tree_status(block, series_index, first_open_c)
             else:
-                status, lock_reason = _series_tree_status(block, series_index, cursor_index[block_type])
+                status, lock_reason = _series_tree_status(block, series_index, x_cursor_index)
             stars = aggregate_stars(block.get("exercise_ids"), stars_map)
             inserted.append(_intensive_lesson_node(
                 block, status, stars, series_index=series_index, lock_reason=lock_reason
@@ -873,7 +884,7 @@ async def get_classroom_tree(
         theme_exercise_names = await _load_theme_exercise_names(conn, all_theme_names)
         theme_test_names = await _load_theme_test_names(conn, all_theme_names)
 
-        coach_completed_names: set[str] | None = None
+        coach_completed_names: set[str] = set()
         if user_id:
             coach_rows = await conn.fetch(
                 """
@@ -933,6 +944,6 @@ async def list_series_blocks(conn, series: str, lang_prefix: str | None = None) 
     blocks = []
     for row in rows:
         item = dict(row)
-        item["exercise_ids"] = _block_exercise_ids(item.get("file_name"))
+        item["exercise_ids"] = _block_exercise_ids(item.get("file_name"), series)
         blocks.append(item)
     return blocks

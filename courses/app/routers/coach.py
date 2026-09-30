@@ -187,7 +187,8 @@ async def coach_lesson_page(
     except FileNotFoundError as exc:
         projector_html, order = f"<p class='text-danger'>{exc}</p>", []
 
-    ticket = _issue_ticket(current_user, lesson_id, "coach")
+    completed = bool(lesson.get("is_completed"))
+    ticket = "" if completed else _issue_ticket(current_user, lesson_id, "coach")
     return render_template(
         request=request,
         name="coach/lesson.html",
@@ -198,7 +199,7 @@ async def coach_lesson_page(
             "queue": queue,
             "projector_html": projector_html,
             "checkbox_ids": order,
-            "open_checkboxes": order if lesson.get("is_completed") else (lesson.get("open_checkboxes") or []),
+            "open_checkboxes": order if completed else (lesson.get("open_checkboxes") or []),
             "ws_ticket": ticket,
             "viewer_role": "coach",
         },
@@ -229,11 +230,6 @@ async def complete_lesson(
         except FileNotFoundError:
             all_ids = list(lesson.get("open_checkboxes") or [])
         lesson = await coach_session.mark_completed(conn, lesson_id, all_ids)
-        await coach_session.advance_student_c_cursor(
-            conn,
-            lesson.get("student_id"),
-            lesson.get("lesson_name"),
-        )
 
     await hub.broadcast(lesson_id, {
         "type": "completed",
@@ -293,7 +289,8 @@ async def student_coach_block(
         return JSONResponse({"error": str(exc)}, status_code=404)
 
     role = viewer_role(current_user, lesson)
-    ticket = _issue_ticket(current_user, lesson["id"], role)
+    completed = bool(lesson.get("is_completed"))
+    ticket = "" if completed else _issue_ticket(current_user, lesson["id"], role)
     return {
         "lesson_id": lesson["id"],
         "lesson_name": lesson.get("lesson_name"),
@@ -301,10 +298,10 @@ async def student_coach_block(
         "file_name": lesson.get("file_name"),
         "status": lesson.get("status"),
         "open_checkboxes": (
-            order if lesson.get("is_completed")
+            order if completed
             else (lesson.get("open_checkboxes") or [])
         ),
-        "all_open": bool(lesson.get("is_completed")),
+        "all_open": completed,
         "checkbox_ids": order,
         "html": projector_html,
         "role": role,
@@ -341,25 +338,25 @@ async def coach_lesson_ws(websocket: WebSocket, lesson_id: int):
         return
 
     pool = _ws_pool(websocket)
+    async with pool.acquire() as conn:
+        lesson = await coach_session.get_lesson(conn, lesson_id)
+    if not lesson:
+        await websocket.close(code=4404)
+        return
+    if lesson.get("is_completed"):
+        # Закрытый урок статичен: сокет не принимаем, в комнату не сажаем.
+        await websocket.close(code=4403)
+        return
+
     await websocket.accept()
     await hub.join(lesson_id, websocket)
 
-    async with pool.acquire() as conn:
-        lesson = await coach_session.get_lesson(conn, lesson_id)
-    open_ids = (lesson or {}).get("open_checkboxes") or []
-    completed = bool((lesson or {}).get("is_completed"))
-    if completed and lesson:
-        try:
-            _html, order = await _load_projector(lesson)
-            if order:
-                open_ids = order
-        except FileNotFoundError:
-            pass
+    open_ids = lesson.get("open_checkboxes") or []
     await websocket.send_json({
         "type": "state",
         "lesson_id": lesson_id,
-        "status": (lesson or {}).get("status"),
-        "all_open": completed,
+        "status": lesson.get("status"),
+        "all_open": False,
         "open_checkboxes": open_ids,
         "role": payload.get("role"),
     })

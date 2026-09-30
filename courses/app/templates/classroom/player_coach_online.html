@@ -189,25 +189,33 @@
 
             apply();
 
+            if (allOpen || !data.lesson_id || !data.ws_ticket) {
+                return;
+            }
+
             const proto = location.protocol === 'https:' ? 'wss' : 'ws';
             const url = proto + '://' + location.host + '/api/coach/ws/' + data.lesson_id +
-                '?ticket=' + encodeURIComponent(data.ws_ticket || '');
+                '?ticket=' + encodeURIComponent(data.ws_ticket);
             const ws = new WebSocket(url);
+            function freezeLesson() {
+                allOpen = true;
+                opened = new Set(collectIds());
+                apply();
+                if (ws.readyState < 2) ws.close();
+            }
             ws.onmessage = function (event) {
                 let payload;
                 try { payload = JSON.parse(event.data); } catch (e) { return; }
                 if (payload.type === 'state' && Array.isArray(payload.open_checkboxes)) {
                     opened = new Set(payload.open_checkboxes.map(String));
                     if (payload.all_open || payload.status === 'completed') {
-                        allOpen = true;
-                        opened = new Set(collectIds());
+                        freezeLesson();
+                        return;
                     }
                     apply();
                 }
                 if (payload.type === 'completed') {
-                    allOpen = true;
-                    opened = new Set(collectIds());
-                    apply();
+                    freezeLesson();
                 }
             };
         }

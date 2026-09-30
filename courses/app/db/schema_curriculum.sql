@@ -104,8 +104,9 @@ WHERE NOT EXISTS (SELECT 1 FROM courses);
 --
 --  Прогресс (таблица users, другая схема):
 --    current_exercise    VARCHAR  -- курсор интерактива
---    intensive_progress  JSONB    -- курсоры параллельных веток {"X": "<exercise>", "C": "<exercise>"}
+--    intensive_progress  JSONB    -- курсор Text Intensive {"BGRU": {"X": "<exercise>"}}
 --    exercise_stars      JSONB    -- качество {"<exercise>": 1|2|3}
+--  Прогресс C — таблица coach_lessons, не intensive_progress.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS intensive_blocks (
     name            VARCHAR(255) PRIMARY KEY,

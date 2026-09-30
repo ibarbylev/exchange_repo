@@ -21,10 +21,11 @@ CREATE TABLE IF NOT EXISTS users (
     last_login          TIMESTAMPTZ,
     current_exercise    JSONB NOT NULL DEFAULT '{}'::jsonb, -- прогресс проверяется по языковой паре:
     intensive_progress  JSONB NOT NULL DEFAULT '{}'::jsonb, -- прогресс проверяется по языковой паре:
-                                                            -- {
-                                                            --    "BGRU": {"X": "BGRUA1_text2_…", "C": null},
-                                                            --    "ENRU": {"X": "ENRUA1_text1_…", "C": null}
-                                                            -- }
+                    -- {
+                    --    "BGRU": {"X": "BGRUA1_text2_…"},
+                    --    "ENRU": {"X": "ENRUA1_text1_…"}
+                    -- }
+                    -- По сути, это прогресс только упражнений TEXT, прогресс coach_lessons ведётся в этой таблицк
     exercise_stars      JSONB NOT NULL DEFAULT '{}'::jsonb,  -- json {exercise_name: <1, 2 or 3>}
 
     is_active           BOOLEAN DEFAULT true NOT NULL,
@@ -394,6 +395,5 @@ FROM (VALUES
          'Курс А2 занятий с преподавателем-носителем языка (9 занятий)', 225.00, TRUE)
 ) AS v(slug, langs, name, price, is_active)
 WHERE NOT EXISTS (SELECT 1 FROM products LIMIT 1);
-
 
 
