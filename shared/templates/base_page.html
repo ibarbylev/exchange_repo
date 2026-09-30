@@ -543,32 +543,34 @@
 
         <script>
             (function () {
+                function textOf(el) {
+                    return el && el.textContent ? el.textContent.replace(/\s+/g, " ").trim() : "";
+                }
+
                 function detectExerciseName() {
-                    var dataEl = document.querySelector("[data-exercise-name]");
-                    if (dataEl && dataEl.getAttribute("data-exercise-name")) {
-                        return dataEl.getAttribute("data-exercise-name");
+                    var tiHeader = document.querySelector(".exercise-header[data-mode='text_intensive']");
+                    var vqtHeader = document.querySelector(".exercise-header[data-mode='vqt']");
+
+                    if (tiHeader) {
+                        if (window.TextLab && TextLab.currentId) {
+                            return String(TextLab.currentId);
+                        }
+                        var activeToc = document.querySelector(".ti-toc-item.active[data-exercise-id]");
+                        if (activeToc && activeToc.getAttribute("data-exercise-id")) {
+                            return activeToc.getAttribute("data-exercise-id");
+                        }
+                        return tiHeader.getAttribute("data-theme") || "";
                     }
-                    var hidden = document.querySelector("input[name='exercise_name'], input#exercise_name, input[name='exerciseName']");
-                    if (hidden && hidden.value) {
-                        return hidden.value;
+
+                    if (vqtHeader) {
+                        var subtitleText = textOf(document.getElementById("exerciseSubtitle"));
+                        if (subtitleText) {
+                            var themeCode = subtitleText.match(/^Код темы::\s*(.+)$/i);
+                            return themeCode ? themeCode[1].trim() : subtitleText;
+                        }
+                        return vqtHeader.getAttribute("data-theme") || "";
                     }
-                    if (window.currentExerciseName) {
-                        return window.currentExerciseName;
-                    }
-                    if (window.exercise && window.exercise.name) {
-                        return window.exercise.name;
-                    }
-                    var params = new URLSearchParams(window.location.search);
-                    if (params.get("name")) {
-                        return params.get("name");
-                    }
-                    if (params.get("exercise") || params.get("exercise_name")) {
-                        return params.get("exercise") || params.get("exercise_name");
-                    }
-                    var pathMatch = window.location.pathname.match(/exercises?\/([^/]+)/i);
-                    if (pathMatch) {
-                        return decodeURIComponent(pathMatch[1]);
-                    }
+
                     return "";
                 }
 
@@ -626,6 +628,7 @@
 
                         var submitBtn = document.getElementById("feedbackSubmitBtn");
                         submitBtn.disabled = true;
+                        document.getElementById("feedbackExerciseName").value = detectExerciseName();
 
                         fetch(form.action, {
                             method: "POST",
@@ -652,7 +655,7 @@
                                     $("#feedbackModal").modal("hide");
                                     submitBtn.disabled = false;
                                     document.getElementById("feedbackFormAlert").style.display = "none";
-                                }, 1200);
+                                }, 3000);
                             });
                         }).catch(function () {
                             showFormAlert("danger", "Не удалось отправить сообщение. Попробуйте ещё раз.");
