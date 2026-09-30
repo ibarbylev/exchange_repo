@@ -1,0 +1,215 @@
+<style data-player-style="classroom-player-coach-css">
+    /* Документ проектора: крупнее текст, таблицы по центру колонки плеера */
+    .coach-online-doc {
+        font-size: 1.18rem;
+        line-height: 1.65;
+        color: #2d3e50;
+    }
+    .coach-online-doc h1 { font-size: 1.85rem; font-weight: 700; }
+    .coach-online-doc h3 { font-size: 1.28rem; }
+    .coach-online-doc h4 { font-size: 1.16rem; }
+    .coach-online-doc p,
+    .coach-online-doc td,
+    .coach-online-doc th,
+    .coach-online-doc li {
+        font-size: 1.18rem;
+        line-height: 1.6;
+    }
+    /* Разметка урока строится на <b>/<i> (окончания, модели). Не даём теме сбросить начертание. */
+    .coach-online-doc b,
+    .coach-online-doc strong {
+        font-weight: 700 !important;
+    }
+    .coach-online-doc i,
+    .coach-online-doc em {
+        font-style: italic !important;
+    }
+
+    /* HTML урока писался под Bootstrap 3 (col-sm-8 + col-sm-offset-2).
+       В classroom сетка другая — принудительно центрируем колонки и таблицы. */
+    .coach-online-doc .row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-left: 0;
+        margin-right: 0;
+    }
+    .coach-online-doc [class*="col-sm-"],
+    .coach-online-doc [class*="col-md-"],
+    .coach-online-doc [class*="col-lg-"] {
+        float: none;
+        margin-left: auto;
+        margin-right: auto;
+        max-width: 920px;
+        width: 100%;
+    }
+    .coach-online-doc table.table,
+    .coach-online-doc table {
+        width: auto;
+        max-width: 100%;
+        margin-left: auto;
+        margin-right: auto;
+        font-size: 1.12rem;
+    }
+    .coach-online-doc table.table th,
+    .coach-online-doc table.table td {
+        text-align: center;
+        vertical-align: middle;
+        padding: 0.55rem 0.75rem;
+    }
+
+    .coach-online-doc [data-block].coach-preview {
+        color: #b0b0b0 !important;
+        opacity: 0.72;
+    }
+    .coach-online-doc [data-block].coach-preview * { color: inherit !important; }
+    .coach-online-doc [data-block].coach-preview b,
+    .coach-online-doc [data-block].coach-preview strong {
+        font-weight: 700 !important;
+    }
+    .coach-online-doc [data-block].student-hidden { visibility: hidden; }
+    .coach-online-doc span[data-checkbox] {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 6px;
+    }
+    .coach-online-doc span[data-checkbox] input {
+        width: 1.15rem;
+        height: 1.15rem;
+    }
+    .coach-online-doc.role-student span[data-checkbox] {
+        display: none !important;
+    }
+
+    .coach-wide-bar {
+        padding: 10px 16px 12px;
+        background: #fff;
+        border-bottom: 1px solid #e0e0e0;
+    }
+    .coach-wide-bar .button-in-table-green {
+        display: block;
+        width: 100%;
+        margin: 0;
+    }
+</style>
+
+<div data-slot="sticky">
+    <div class="exercise-header">
+        <h3 class="mb-1">{{ theme_title or theme_heading or theme_name }}</h3>
+        <p class="mb-0" id="coachOnlineStatus">Совместный урок с коучем</p>
+    </div>
+    <div class="coach-wide-bar">
+        <button type="button"
+                class="btn button-in-table-green"
+                id="classroomWideToggle"
+                data-classroom-wide-toggle
+                aria-pressed="false">
+            <span data-classroom-wide-label>Развернуть</span>
+        </button>
+    </div>
+</div>
+
+<div data-slot="content">
+    <div id="coachOnlineMount" class="p-3">
+        <div class="text-muted p-4">Загрузка документа урока…</div>
+    </div>
+</div>
+
+<script data-player-script="classroom-player-coach-js">
+    Classroom.modes = Classroom.modes || {};
+    Classroom.modes.coach_online = {
+        async init({ theme, root }) {
+            const mount = document.getElementById('coachOnlineMount');
+            const status = document.getElementById('coachOnlineStatus');
+            if (!mount) return;
+
+            if (window.Classroom && Classroom.layout) {
+                Classroom.layout.bind();
+            }
+
+            const res = await fetch('/api/classroom/coach/' + encodeURIComponent(theme), {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 409 && data.hub) {
+                mount.innerHTML = '<div class="alert alert-info m-3">Коуч открывает урок со <a href="' +
+                    data.hub + '">своей страницы</a>.</div>';
+                return;
+            }
+            if (!res.ok) {
+                mount.innerHTML = '<div class="alert alert-warning m-3">' +
+                    (data.message || data.error || 'Урок недоступен') + '</div>';
+                return;
+            }
+
+            const role = data.role || 'student';
+            mount.className = 'coach-online-doc p-3 ' + (role === 'coach' ? 'role-coach' : 'role-student');
+            mount.innerHTML = data.html || '';
+            if (status) {
+                status.textContent = (data.title || theme) +
+                    (data.coach_name ? ' · коуч: ' + data.coach_name : '');
+            }
+
+            let opened = new Set((data.open_checkboxes || []).map(String));
+            let allOpen = Boolean(data.all_open || data.status === 'completed');
+
+            function collectIds() {
+                return Array.from(mount.querySelectorAll('span[data-checkbox]'))
+                    .map((span) => String(span.dataset.checkbox || ''))
+                    .filter(Boolean);
+            }
+
+            function isOpen(id) {
+                return allOpen || opened.has(String(id));
+            }
+
+            if (role === 'coach') {
+                mount.querySelectorAll('span[data-checkbox]').forEach((span) => {
+                    if (span.querySelector('input')) return;
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.dataset.checkboxInput = span.dataset.checkbox;
+                    input.disabled = allOpen;
+                    span.appendChild(input);
+                });
+            }
+
+            function apply() {
+                mount.querySelectorAll('[data-block]').forEach((node) => {
+                    const open = isOpen(node.dataset.block);
+                    node.classList.toggle('is-open', open);
+                    node.classList.toggle('coach-preview', role === 'coach' && !open);
+                    node.classList.toggle('student-hidden', role !== 'coach' && !open);
+                });
+                mount.querySelectorAll('span[data-checkbox] input').forEach((input) => {
+                    input.checked = isOpen(input.dataset.checkboxInput);
+                });
+            }
+
+            apply();
+
+            const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+            const url = proto + '://' + location.host + '/api/coach/ws/' + data.lesson_id +
+                '?ticket=' + encodeURIComponent(data.ws_ticket || '');
+            const ws = new WebSocket(url);
+            ws.onmessage = function (event) {
+                let payload;
+                try { payload = JSON.parse(event.data); } catch (e) { return; }
+                if (payload.type === 'state' && Array.isArray(payload.open_checkboxes)) {
+                    opened = new Set(payload.open_checkboxes.map(String));
+                    if (payload.all_open || payload.status === 'completed') {
+                        allOpen = true;
+                        opened = new Set(collectIds());
+                    }
+                    apply();
+                }
+                if (payload.type === 'completed') {
+                    allOpen = true;
+                    opened = new Set(collectIds());
+                    apply();
+                }
+            };
+        }
+    };
+</script>

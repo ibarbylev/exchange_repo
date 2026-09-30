@@ -317,26 +317,19 @@ async def student_coach_block(
 def _ws_pool(websocket: WebSocket):
     """Пул БД нельзя брать через DBPoolDep: get_db_pool() требует Request.
 
-    У WebSocket нет Request, поэтому FastAPI вызывает get_db_pool() без аргументов.
-    Берём тот же объект с app.state / вызываем get_db_pool вручную.
+    У WebSocket нет Request, поэтому FastAPI вызывает get_db_pool() без аргументов
+    и падает. Берём тот же объект с app.state, не вызывая get_db_pool:
+    отсутствие db_pool даёт AttributeError, а не TypeError, и хендлер
+    молча умирает — тесты видят только таймаут ожидания сообщения.
     """
-    try:
-        from app.db.dependencies import get_db_pool
-    except ImportError:
-        get_db_pool = None
-
-    if get_db_pool is not None:
-        try:
-            return get_db_pool(websocket)
-        except TypeError:
-            pass
-
-    state = websocket.app.state
-    for name in ("pool", "db_pool", "pg_pool"):
-        pool = getattr(state, name, None)
-        if pool is not None:
-            return pool
-    raise RuntimeError("Пул БД не найден на app.state (ожидались pool/db_pool/pg_pool)")
+    app_obj = getattr(websocket, "app", None)
+    state = getattr(app_obj, "state", None) if app_obj is not None else None
+    if state is not None:
+        for name in ("db_pool", "pool", "pg_pool"):
+            pool = getattr(state, name, None)
+            if pool is not None:
+                return pool
+    raise RuntimeError("Пул БД не найден на app.state (ожидались db_pool/pool/pg_pool)")
 
 
 @router.websocket("/api/coach/ws/{lesson_id}")
