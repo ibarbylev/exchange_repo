@@ -630,7 +630,7 @@ class TestCoachPages:
         assert res.status_code == 403
 
     @pytest.mark.asyncio
-    async def test_complete_lesson_advances_c_cursor(
+    async def test_complete_lesson_opens_next_in_queue(
         self, client, db_pool, create_user
     ):
         course = await _make_c_course(db_pool)
@@ -645,7 +645,7 @@ class TestCoachPages:
             lesson_name=course["first"],
             status="in_progress",
         )
-        await _add_lesson(
+        second_id = await _add_lesson(
             db_pool,
             student_id=student_id,
             coach_id=coach_id,
@@ -663,8 +663,8 @@ class TestCoachPages:
             "SELECT status FROM coach_lessons WHERE id = $1", lesson_id
         )
         assert status == "completed"
-        raw = await db_pool.fetchval(
-            "SELECT intensive_progress FROM users WHERE id = $1", student_id
-        )
-        data = raw if isinstance(raw, dict) else json.loads(raw)
-        assert data["BGRU"]["C"] == course["second"]
+        async with db_pool.acquire() as conn:
+            queue = await coach_session.list_student_queue(conn, student_id, coach_id)
+        assert queue[0]["queue_state"] == "completed"
+        assert queue[1]["id"] == second_id
+        assert queue[1]["queue_state"] == "current"
