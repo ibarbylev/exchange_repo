@@ -14,6 +14,30 @@ def get_db_pool(request: Request) -> asyncpg.Pool:
 
 DBPoolDep = Annotated[asyncpg.Pool, Depends(get_db_pool)]
 
+
+def _cached_auth_user(request: Request):
+    """Пользователь, уже проверенный на этом запросе.
+
+    Ellipsis — проверки ещё не было.
+    None — проверяли, сессии нет.
+    dict — проверяли, пользователь найден.
+    """
+    if not getattr(request.state, "auth_checked", False):
+        return Ellipsis
+    return getattr(request.state, "user", None)
+
+
+def _remember_auth_user(request: Request, user: dict | None) -> None:
+    """Фиксирует результат одной проверки JWT/сессии на весь запрос."""
+    request.state.auth_checked = True
+    request.state.user = user
+    request.state.is_authenticated = bool(user)
+    if user and isinstance(user, dict):
+        request.state.role = user.get("role") or "student"
+    elif not getattr(request.state, "role", None):
+        request.state.role = "student"
+
+
 # ============================================================
 # 1. СТРОГАЯ АВТОРИЗАЦИЯ (для API → 401)
 # ============================================================
@@ -24,11 +48,27 @@ async def get_current_active_user(
         access_token: str = None
 ):
     """Возвращает текущего авторизованного пользователя.
-    При отсутствии токена выбрасывает HTTPException(401)."""
-    if not token:
-        token = access_token or request.cookies.get("access_token")
+    При отсутствии токена выбрасывает HTTPException(401).
 
-    if not token:
+    Если AuthMiddleware (или предыдущая зависимость) уже проверил
+    сессию, повторно JWT и БД не трогаем.
+    """
+    explicit_token = token or access_token
+    if not explicit_token:
+        cached = _cached_auth_user(request)
+        if cached is not Ellipsis:
+            if cached:
+                return cached
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Не авторизован",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    if not explicit_token:
+        explicit_token = request.cookies.get("access_token")
+
+    if not explicit_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Не авторизован",
@@ -36,7 +76,9 @@ async def get_current_active_user(
         )
 
     # Проверяем токен + активную сессию
-    user_data = await verify_token(token=token, pool=pool)
+    user_data = await verify_token(token=explicit_token, pool=pool)
+    if token is None and access_token is None:
+        _remember_auth_user(request, user_data)
     return user_data
 
 
@@ -52,7 +94,14 @@ async def get_current_user_required(
     """
     Для HTML-страниц.
     При отсутствии/невалидном токене — сразу 303 Redirect на логин.
+    Повторную проверку сессии не делает, если middleware уже отработал.
     """
+    cached = _cached_auth_user(request)
+    if cached is not Ellipsis:
+        if cached:
+            return cached
+        raise _make_login_redirect_exception(request)
+
     token = request.cookies.get("access_token")
 
     if not token:
@@ -60,6 +109,7 @@ async def get_current_user_required(
 
     try:
         user_data = await verify_token(token=token, pool=pool)
+        _remember_auth_user(request, user_data)
         return user_data
     except Exception:
         raise _make_login_redirect_exception(request)
@@ -94,20 +144,22 @@ async def get_current_active_user_optional(
     request: Request,
     pool: DBPoolDep,
 ) -> Optional[dict]:
-    # Сначала проверяем, что уже проверил AuthMiddleware
-    user = getattr(request.state, "user", None)
-    if user:
-        return user
+    cached = _cached_auth_user(request)
+    if cached is not Ellipsis:
+        return cached
 
-    # Если в state ничего нет — пробуем получить сами
     try:
         token = request.cookies.get("access_token")
         if not token:
+            _remember_auth_user(request, None)
             return None
 
-        return await verify_token(token=token, pool=pool)
+        user = await verify_token(token=token, pool=pool)
+        _remember_auth_user(request, user)
+        return user
     except Exception as e:
         print(e)
+        _remember_auth_user(request, None)
         return None
 
 

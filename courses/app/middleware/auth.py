@@ -30,10 +30,12 @@ class AuthMiddleware(BaseHTTPMiddleware):
             else:
                 print(f"[AuthMiddleware] Неожиданная ошибка: {exc}")
 
-        # Сохраняем в state для шаблонов
+        # Сохраняем в state для шаблонов и зависимостей этого же запроса.
+        # auth_checked=True запрещает CurrentUser/RequiredUser ходить в JWT/БД повторно.
         request.state.user = user
         request.state.is_authenticated = is_authenticated
         request.state.session_kicked = session_kicked
+        request.state.auth_checked = True
         if user and isinstance(user, dict):
             request.state.role = user.get("role") or "student"
         else:

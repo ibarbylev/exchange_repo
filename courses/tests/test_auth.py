@@ -367,3 +367,65 @@ async def test_login_wrong_password(client: AsyncClient, db_pool, user_data):
 
     assert response.status_code == 401
     assert "неверный email или пароль" in response.text.lower()
+
+
+# --- Одна проверка сессии на HTTP-запрос -----------------------------------
+@pytest.mark.asyncio
+async def test_session_verified_once_on_current_user_endpoint(auth_client):
+    """Middleware + CurrentUser не должны дважды декодировать JWT и ходить в сессии."""
+    from app.db import dependencies as deps
+
+    client, _user_id = auth_client
+    real_verify = deps.verify_token
+    calls = {"n": 0}
+
+    async def wrapped(*args, **kwargs):
+        calls["n"] += 1
+        return await real_verify(*args, **kwargs)
+
+    with patch("app.db.dependencies.verify_token", side_effect=wrapped):
+        response = await client.get("/api/user/access-level")
+
+    assert response.status_code == 200
+    assert "accessLevel" in response.json()
+    assert calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_session_verified_once_on_required_user_page(auth_client):
+    """HTML-зависимость RequiredUser тоже берёт пользователя из request.state."""
+    from app.db import dependencies as deps
+
+    client, _user_id = auth_client
+    real_verify = deps.verify_token
+    calls = {"n": 0}
+
+    async def wrapped(*args, **kwargs):
+        calls["n"] += 1
+        return await real_verify(*args, **kwargs)
+
+    with patch("app.db.dependencies.verify_token", side_effect=wrapped):
+        response = await client.get("/bg/ru/coach/")
+
+    # У обычного ученика страница коуча закрыта, но сессия уже проверена.
+    assert response.status_code in (403, 303)
+    assert calls["n"] == 1
+
+
+@pytest.mark.asyncio
+async def test_anonymous_current_user_does_not_hit_session_store(client):
+    """Без cookie нечего проверять в БД — ни middleware, ни зависимость."""
+    from app.db import dependencies as deps
+
+    real_verify = deps.verify_token
+    calls = {"n": 0}
+
+    async def wrapped(*args, **kwargs):
+        calls["n"] += 1
+        return await real_verify(*args, **kwargs)
+
+    with patch("app.db.dependencies.verify_token", side_effect=wrapped):
+        response = await client.get("/api/user/access-level")
+
+    assert response.status_code == 401
+    assert calls["n"] == 0
