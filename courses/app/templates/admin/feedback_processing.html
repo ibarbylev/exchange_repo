@@ -1,0 +1,291 @@
+{% extends "admin/admin_base_page.html" %}
+
+{% block title %}Обратная связь{% endblock %}
+
+{% block extra_head %}
+<style>
+    .fb-bool { border: 0; background: transparent; padding: 0; line-height: 1; }
+    .fb-bool i { font-size: 1.15rem; }
+    .fb-msg {
+        max-width: 28rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .fb-msg.collapsed {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        white-space: normal;
+    }
+    .fb-meta { font-size: .8rem; color: #6c757d; }
+    .table td { vertical-align: top; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+            <h1 class="h4 mb-1">Обратная связь</h1>
+            <p class="text-muted mb-0">Новые сообщения сверху. Клик по значку меняет значение и пишет время в answered_at.</p>
+        </div>
+        <span class="badge text-bg-secondary">{{ total }} записей</span>
+    </div>
+
+    {% if ok == 'updated' %}
+        <div class="alert alert-success py-2">Запись сохранена.</div>
+    {% elif ok == 'deleted' %}
+        <div class="alert alert-success py-2">Запись удалена.</div>
+    {% elif error == 'empty_fields' %}
+        <div class="alert alert-danger py-2">Тема и текст сообщения обязательны.</div>
+    {% elif error == 'not_found' %}
+        <div class="alert alert-danger py-2">Запись не найдена.</div>
+    {% elif error %}
+        <div class="alert alert-danger py-2">Не удалось выполнить действие.</div>
+    {% endif %}
+
+    <form method="get" action="/admin/feedback_processing/" class="card shadow-sm mb-3">
+        <div class="card-body py-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label mb-1">Статус</label>
+                    <select name="status" class="form-select">
+                        <option value="open" {% if status == 'open' %}selected{% endif %}>Открытые</option>
+                        <option value="resolved" {% if status == 'resolved' %}selected{% endif %}>Решённые</option>
+                        <option value="all" {% if status == 'all' %}selected{% endif %}>Все</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label mb-1">Нужен ответ</label>
+                    <select name="want_reply" class="form-select">
+                        <option value="" {% if not want_reply %}selected{% endif %}>Не важно</option>
+                        <option value="1" {% if want_reply == '1' %}selected{% endif %}>Только да</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label mb-1">Поиск</label>
+                    <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="email, имя, тема, текст">
+                </div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-dark w-100">Найти</button>
+                    <a href="/admin/feedback_processing/" class="btn btn-outline-secondary">Сброс</a>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Когда</th>
+                        <th>Пользователь</th>
+                        <th>Тема / сообщение</th>
+                        <th class="text-center">Ответ</th>
+                        <th class="text-center">Качество</th>
+                        <th class="text-center">Решено</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td class="text-muted">{{ item.id }}</td>
+                        <td class="fb-meta">
+                            <div>{{ item.created_at.strftime('%d.%m.%Y %H:%M') if item.created_at else '—' }}</div>
+                            {% if item.answered_at %}
+                                <div>изм. {{ item.answered_at.strftime('%d.%m.%Y %H:%M') }}</div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div>{{ item.username }}</div>
+                            <div class="fb-meta">{{ item.email }}</div>
+                            <div class="fb-meta">id {{ item.user_id }}</div>
+                        </td>
+                        <td>
+                            <div class="fw-semibold mb-1">{{ item.topic }}</div>
+                            <div class="fb-msg collapsed">{{ item.message }}</div>
+                            {% if item.page_url or item.exercise_name %}
+                                <div class="fb-meta mt-1">
+                                    {% if item.exercise_name %}{{ item.exercise_name }}{% endif %}
+                                    {% if item.page_url %}
+                                        · <a href="{{ item.page_url }}" target="_blank" rel="noopener">страница</a>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            <form method="post" action="/admin/feedback_processing/toggle/">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="feedback_id" value="{{ item.id }}">
+                                <input type="hidden" name="field" value="want_reply">
+                                <input type="hidden" name="status" value="{{ status }}">
+                                <input type="hidden" name="filter_want_reply" value="{{ want_reply }}">
+                                <input type="hidden" name="q" value="{{ q }}">
+                                <input type="hidden" name="page" value="{{ page }}">
+                                <button type="submit" class="fb-bool" title="Нужен ответ">
+                                    {% if item.want_reply %}
+                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                    {% else %}
+                                        <i class="bi bi-x-circle-fill text-danger"></i>
+                                    {% endif %}
+                                </button>
+                            </form>
+                        </td>
+                        <td class="text-center">
+                            <form method="post" action="/admin/feedback_processing/toggle/">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="feedback_id" value="{{ item.id }}">
+                                <input type="hidden" name="field" value="question_quality">
+                                <input type="hidden" name="status" value="{{ status }}">
+                                <input type="hidden" name="filter_want_reply" value="{{ want_reply }}">
+                                <input type="hidden" name="q" value="{{ q }}">
+                                <input type="hidden" name="page" value="{{ page }}">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary px-2" title="Качество вопроса (0/1)">
+                                    {{ item.question_quality | int }}
+                                </button>
+                            </form>
+                        </td>
+                        <td class="text-center">
+                            <form method="post" action="/admin/feedback_processing/toggle/">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="feedback_id" value="{{ item.id }}">
+                                <input type="hidden" name="field" value="is_resolved">
+                                <input type="hidden" name="status" value="{{ status }}">
+                                <input type="hidden" name="filter_want_reply" value="{{ want_reply }}">
+                                <input type="hidden" name="q" value="{{ q }}">
+                                <input type="hidden" name="page" value="{{ page }}">
+                                <button type="submit" class="fb-bool" title="Решено">
+                                    {% if item.is_resolved %}
+                                        <i class="bi bi-check-circle-fill text-success"></i>
+                                    {% else %}
+                                        <i class="bi bi-x-circle-fill text-danger"></i>
+                                    {% endif %}
+                                </button>
+                            </form>
+                        </td>
+                        <td class="text-nowrap">
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#editModal{{ item.id }}">
+                                Изменить
+                            </button>
+                            <form method="post"
+                                  action="/admin/feedback_processing/delete/"
+                                  class="d-inline"
+                                  onsubmit="return confirm('Удалить сообщение #{{ item.id }}?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="feedback_id" value="{{ item.id }}">
+                                <input type="hidden" name="status" value="{{ status }}">
+                                <input type="hidden" name="filter_want_reply" value="{{ want_reply }}">
+                                <input type="hidden" name="q" value="{{ q }}">
+                                <input type="hidden" name="page" value="{{ page }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">Сообщений нет</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% for item in items %}
+    <div class="modal fade" id="editModal{{ item.id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <form method="post" action="/admin/feedback_processing/update/">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Сообщение #{{ item.id }}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="feedback_id" value="{{ item.id }}">
+                        <input type="hidden" name="status" value="{{ status }}">
+                        <input type="hidden" name="filter_want_reply" value="{{ want_reply }}">
+                        <input type="hidden" name="q" value="{{ q }}">
+                        <input type="hidden" name="page" value="{{ page }}">
+
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Тема</label>
+                                <select name="topic" class="form-select" required>
+                                    {% for topic in topics %}
+                                        <option value="{{ topic }}" {% if item.topic == topic %}selected{% endif %}>{{ topic }}</option>
+                                    {% endfor %}
+                                    {% if item.topic not in topics %}
+                                        <option value="{{ item.topic }}" selected>{{ item.topic }}</option>
+                                    {% endif %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Упражнение</label>
+                                <input type="text" name="exercise_name" class="form-control" value="{{ item.exercise_name or '' }}">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Страница</label>
+                                <input type="text" name="page_url" class="form-control" value="{{ item.page_url or '' }}">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label">Сообщение</label>
+                                <textarea name="message" class="form-control" rows="7" required>{{ item.message }}</textarea>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="want_reply" id="want{{ item.id }}" {% if item.want_reply %}checked{% endif %}>
+                                    <label class="form-check-label" for="want{{ item.id }}">Нужен ответ</label>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Качество вопроса</label>
+                                <select name="question_quality" class="form-select">
+                                    <option value="0" {% if item.question_quality|int == 0 %}selected{% endif %}>0</option>
+                                    <option value="1" {% if item.question_quality|int == 1 %}selected{% endif %}>1</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="is_resolved" id="res{{ item.id }}" {% if item.is_resolved %}checked{% endif %}>
+                                    <label class="form-check-label" for="res{{ item.id }}">Решено</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" class="btn btn-dark">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    {% if total_pages > 1 %}
+    <nav class="mt-3">
+        <ul class="pagination justify-content-center mb-0">
+            {% if page > 1 %}
+            <li class="page-item">
+                <a class="page-link" href="?status={{ status }}&want_reply={{ want_reply }}&q={{ q }}&page={{ page - 1 }}">Назад</a>
+            </li>
+            {% endif %}
+            <li class="page-item disabled"><span class="page-link">{{ page }} / {{ total_pages }}</span></li>
+            {% if page < total_pages %}
+            <li class="page-item">
+                <a class="page-link" href="?status={{ status }}&want_reply={{ want_reply }}&q={{ q }}&page={{ page + 1 }}">Вперёд</a>
+            </li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

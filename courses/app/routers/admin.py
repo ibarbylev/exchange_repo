@@ -1,4 +1,5 @@
 import uuid
+from urllib.parse import quote
 from fastapi import APIRouter, Request, HTTPException, Form, Query, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from datetime import date, datetime, timedelta, timezone
@@ -1011,6 +1012,308 @@ async def coach_update_lesson(
         )
 
 
+# ==================== Feedback ====================
+
+FEEDBACK_TOPICS = (
+    "Вопрос по программе обучения",
+    "Вопрос к службе технической поддержки",
+    "Ошибка в тексте (звуковом файле, видео)",
+    "Прочие вопросы",
+)
+
+
+def _feedback_as_bool(value: str | None) -> bool:
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "on", "yes", "da"}
+
+
+def _feedback_list_url(
+    *,
+    status: str | None = None,
+    want_reply: str | None = None,
+    q: str | None = None,
+    page: int | None = None,
+    ok: str | None = None,
+    error: str | None = None,
+) -> str:
+    params: list[str] = []
+    if status:
+        params.append(f"status={status}")
+    if want_reply:
+        params.append(f"want_reply={want_reply}")
+    if q:
+        params.append(f"q={quote(q)}")
+    if page and page > 1:
+        params.append(f"page={page}")
+    if ok:
+        params.append(f"ok={ok}")
+    if error:
+        params.append(f"error={error}")
+    return "/admin/feedback_processing/" + (f"?{'&'.join(params)}" if params else "")
+
+
+@router.get("/feedback_processing/", response_class=HTMLResponse)
+async def admin_feedback_page(
+    request: Request,
+    pool: DBPoolDep,
+    current_superuser: CurrentSuperUser = None,
+    status: str = Query("all"),
+    want_reply: str | None = Query(None),
+    q: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(30, ge=10, le=200),
+):
+    if not current_superuser:
+        return RedirectResponse(
+            url=f"/{DEFAULT_SOURCE_LANGUAGE}/{DEFAULT_UI_LANGUAGE}/auth/login/",
+            status_code=303,
+        )
+
+    where = []
+    params: list[Any] = []
+
+    if status == "open":
+        where.append("f.is_resolved = FALSE")
+    elif status == "resolved":
+        where.append("f.is_resolved = TRUE")
+
+    if want_reply in {"1", "true", "yes"}:
+        where.append("f.want_reply = TRUE")
+
+    if q and q.strip():
+        params.append(f"%{q.strip()}%")
+        idx = len(params)
+        where.append(
+            f"(u.email ILIKE ${idx} OR u.username ILIKE ${idx} "
+            f"OR f.topic ILIKE ${idx} OR f.message ILIKE ${idx} "
+            f"OR COALESCE(f.exercise_name, '') ILIKE ${idx})"
+        )
+
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+
+    total = await pool.fetchval(
+        f"""
+        SELECT COUNT(*)
+        FROM feedback f
+        JOIN users u ON u.id = f.user_id
+        {where_sql}
+        """,
+        *params,
+    )
+
+    offset = (page - 1) * per_page
+    rows = await pool.fetch(
+        f"""
+        SELECT
+            f.id,
+            f.user_id,
+            u.username,
+            u.email,
+            f.topic,
+            f.message,
+            f.page_url,
+            f.exercise_name,
+            f.want_reply,
+            f.question_quality,
+            f.is_resolved,
+            f.created_at,
+            f.answered_at
+        FROM feedback f
+        JOIN users u ON u.id = f.user_id
+        {where_sql}
+        ORDER BY f.id DESC
+        LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}
+        """,
+        *params,
+        per_page,
+        offset,
+    )
+
+    total_pages = max(1, (total + per_page - 1) // per_page) if total else 1
+
+    return templates.TemplateResponse(
+        name="admin/feedback_processing.html",
+        request=request,
+        context={
+            "user": current_superuser,
+            "items": [dict(r) for r in rows],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
+            "status": status,
+            "want_reply": want_reply or "",
+            "q": q or "",
+            "topics": FEEDBACK_TOPICS,
+            "csrf_token": getattr(request.state, "csrf_token", None),
+            "ok": request.query_params.get("ok"),
+            "error": request.query_params.get("error"),
+        },
+    )
+
+
+@router.post("/feedback_processing/update/")
+async def admin_feedback_update(
+    request: Request,
+    pool: DBPoolDep,
+    current_superuser: CurrentSuperUser = None,
+    feedback_id: int = Form(...),
+    topic: str = Form(...),
+    message: str = Form(...),
+    page_url: str = Form(""),
+    exercise_name: str = Form(""),
+    want_reply: str | None = Form(None),
+    question_quality: str = Form("0"),
+    is_resolved: str | None = Form(None),
+    status: str = Form("all"),
+    filter_want_reply: str = Form(""),
+    q: str = Form(""),
+    page: int = Form(1),
+    _=Depends(verify_csrf),
+):
+    if not current_superuser:
+        raise HTTPException(status_code=401)
+
+    topic = topic.strip()
+    message = message.strip()
+    if not topic or not message:
+        return RedirectResponse(
+            url=_feedback_list_url(
+                status=status,
+                want_reply=filter_want_reply or None,
+                q=q or None,
+                page=page,
+                error="empty_fields",
+            ),
+            status_code=303,
+        )
+
+    try:
+        quality = 1 if int(question_quality) == 1 else 0
+    except (TypeError, ValueError):
+        quality = 0
+
+    result = await pool.execute(
+        """
+        UPDATE feedback
+        SET topic = $1,
+            message = $2,
+            page_url = $3,
+            exercise_name = $4,
+            want_reply = $5,
+            question_quality = $6,
+            is_resolved = $7,
+            answered_at = NOW()
+        WHERE id = $8
+        """,
+        topic,
+        message,
+        page_url.strip() or None,
+        exercise_name.strip() or None,
+        _feedback_as_bool(want_reply),
+        quality,
+        _feedback_as_bool(is_resolved),
+        feedback_id,
+    )
+
+    ok = "updated" if result != "UPDATE 0" else None
+    error = None if ok else "not_found"
+    return RedirectResponse(
+        url=_feedback_list_url(
+            status=status,
+            want_reply=filter_want_reply or None,
+            q=q or None,
+            page=page,
+            ok=ok,
+            error=error,
+        ),
+        status_code=303,
+    )
+
+
+@router.post("/feedback_processing/toggle/")
+async def admin_feedback_toggle(
+    request: Request,
+    pool: DBPoolDep,
+    current_superuser: CurrentSuperUser = None,
+    feedback_id: int = Form(...),
+    field: str = Form(...),
+    status: str = Form("all"),
+    filter_want_reply: str = Form(""),
+    q: str = Form(""),
+    page: int = Form(1),
+    _=Depends(verify_csrf),
+):
+    if not current_superuser:
+        raise HTTPException(status_code=401)
+
+    allowed = {
+        "want_reply": "want_reply = NOT want_reply",
+        "is_resolved": "is_resolved = NOT is_resolved",
+        "question_quality": "question_quality = CASE WHEN question_quality = 1 THEN 0 ELSE 1 END",
+    }
+    assignment = allowed.get(field)
+    if not assignment:
+        return RedirectResponse(
+            url=_feedback_list_url(
+                status=status,
+                want_reply=filter_want_reply or None,
+                q=q or None,
+                page=page,
+                error="bad_field",
+            ),
+            status_code=303,
+        )
+
+    await pool.execute(
+        f"""
+        UPDATE feedback
+        SET {assignment},
+            answered_at = NOW()
+        WHERE id = $1
+        """,
+        feedback_id,
+    )
+
+    return RedirectResponse(
+        url=_feedback_list_url(
+            status=status,
+            want_reply=filter_want_reply or None,
+            q=q or None,
+            page=page,
+            ok="updated",
+        ),
+        status_code=303,
+    )
+
+
+@router.post("/feedback_processing/delete/")
+async def admin_feedback_delete(
+    request: Request,
+    pool: DBPoolDep,
+    current_superuser: CurrentSuperUser = None,
+    feedback_id: int = Form(...),
+    status: str = Form("all"),
+    filter_want_reply: str = Form(""),
+    q: str = Form(""),
+    page: int = Form(1),
+    _=Depends(verify_csrf),
+):
+    if not current_superuser:
+        raise HTTPException(status_code=401)
+
+    await pool.execute("DELETE FROM feedback WHERE id = $1", feedback_id)
+    return RedirectResponse(
+        url=_feedback_list_url(
+            status=status,
+            want_reply=filter_want_reply or None,
+            q=q or None,
+            page=page,
+            ok="deleted",
+        ),
+        status_code=303,
+    )
 
 
 @router.get("/{table_name}/", response_class=HTMLResponse)
