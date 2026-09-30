@@ -346,6 +346,26 @@ CREATE TRIGGER tr_apply_access_from_history
     EXECUTE FUNCTION apply_access_from_history();
 
 
+--------------------------------------------------------------------------------
+-- 9. Обратная связь (feedback)
+--------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS feedback (
+    id                  INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+
+    topic               VARCHAR(255) NOT NULL,
+    message             TEXT NOT NULL,
+    page_url            TEXT,                       -- адрес страницы отправки
+    exercise_name       VARCHAR(255),               -- name упражнения, если отправлено из плеера
+
+    want_reply          BOOLEAN NOT NULL DEFAULT FALSE,
+
+    question_quality    SMALLINT NOT NULL DEFAULT 0 CHECK (question_quality IN (0, 1)),
+    is_resolved         BOOLEAN NOT NULL DEFAULT FALSE,
+
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    answered_at         TIMESTAMPTZ
+);
 
 
 

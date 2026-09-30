@@ -6,49 +6,19 @@
         <title>{% block title %}I   {% endblock %}</title>
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=0">
-        
-		<!-- favicon
-		============================================ -->		
-        <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', path='img/favicon.ico') }}">
-		<!-- Google Fonts
-		============================================ -->		
-        <link href='https://fonts.googleapis.com/css?family=Raleway:400,300,500,600,700,800' rel='stylesheet' type='text/css'>
-        
-		<!-- Color Swithcer CSS
-		============================================ -->
-        <link rel="stylesheet" href="{{ url_for('static', path='css/color-switcher.css') }}">
-        
-		<!-- Fontawsome CSS
-		============================================ -->
-<!--        <link rel="stylesheet" href="{{ url_for('static', path='css/font-awesome.min.css') }}">-->
 
-		<!-- Metarial Iconic Font CSS
-		============================================ -->
+        <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', path='img/favicon.ico') }}">
+        <link href='https://fonts.googleapis.com/css?family=Raleway:400,300,500,600,700,800' rel='stylesheet' type='text/css'>
+        <link rel="stylesheet" href="{{ url_for('static', path='css/color-switcher.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', path='css/material-design-iconic-font.min.css') }}">
-        
-        <!-- Bootstrap CSS
-		============================================ -->		
         <link rel="stylesheet" href="{{ url_for('static', path='css/bootstrap.min.css') }}">
-        
-		<!-- Plugins CSS
-		============================================ -->
         <link rel="stylesheet" href="{{ url_for('static', path='css/plugins.css') }}">
-		<!-- Style CSS
-		============================================ -->
         <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
-        
-		<!-- Color CSS
-		============================================ -->
         <link rel="stylesheet" href="{{ url_for('static', path='css/color.css') }}">
-        
-		<!-- Responsive CSS
-		============================================ -->
         <link rel="stylesheet" href="{{ url_for('static', path='css/responsive.css') }}">
 
         <link rel="stylesheet" href="{{ url_for('static', path='css/my-css/my-style.css') }}">
 
-		<!-- Modernizr JS
-		============================================ -->		
         <script src="{{ url_for('static', path='js/vendor/modernizr-2.8.3.min.js') }}"></script>
 
         <!-- Add 2 icons in the exercise-tree for Intensive (text_intensive and coach_online:
@@ -57,23 +27,41 @@
 
         </head>
     <body>
-{% if request.cookies.get('flash') == 'session_kicked' %}
+{% set flash_cookie = request.cookies.get('flash') %}
+{% if flash_cookie == 'session_kicked' %}
 <div class="alert alert-warning alert-dismissible fade show" role="alert">
     Ваша сессия была завершена с другого устройства.<br>
     Пожалуйста, войдите заново.
-
-    <!-- Крестик для Bootstrap 4 -->
-    <button type="button"
-            class="close"
-            data-dismiss="alert"
-            aria-label="Закрыть">
+    <button type="button" class="close" data-dismiss="alert" aria-label="Закрыть">
         <span aria-hidden="true">&times;</span>
     </button>
 </div>
-
-<!-- JS для удаления куки после закрытия -->
+{% elif flash_cookie == 'feedback_need_login' %}
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+    Чтобы отправить сообщение обратной связи, необходимо войти в аккаунт.
+    <button type="button" class="close" data-dismiss="alert" aria-label="Закрыть">
+        <span aria-hidden="true">&times;</span>
+    </button>
+</div>
+{% elif flash_cookie == 'feedback_sent' %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    Спасибо! Ваше сообщение отправлено.
+    <button type="button" class="close" data-dismiss="alert" aria-label="Закрыть">
+        <span aria-hidden="true">&times;</span>
+    </button>
+</div>
+{% elif flash_cookie == 'feedback_error' %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    Не удалось отправить сообщение. Заполните тему и текст и попробуйте ещё раз.
+    <button type="button" class="close" data-dismiss="alert" aria-label="Закрыть">
+        <span aria-hidden="true">&times;</span>
+    </button>
+</div>
+{% endif %}
+{% if flash_cookie %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        document.cookie = "flash=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
         const alertEl = document.querySelector('.alert-dismissible');
         if (alertEl) {
             alertEl.addEventListener('closed.bs.alert', function () {
@@ -86,7 +74,7 @@
     <!--[if lt IE 8]>
             <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.</p>
         <![endif]-->
-        
+
         <!--Main Wrapper Start-->
         <div class="as-mainwrapper">
             <!--Bg White Start-->
@@ -164,7 +152,7 @@
                                 </div>
                             </div>
                         </div>
-                    </div>  
+                    </div>
                     <!-- Mobile Menu Area start -->
                     <div class="mobile-menu-area">
                         <div class="container clearfix">
@@ -287,12 +275,12 @@
                                                 <li><a href="contact.html">Contact us</a></li>
                                             </ul>
                                         </nav>
-                                    </div>					
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <!-- Mobile Menu Area end -->    
+                    <!-- Mobile Menu Area end -->
                 </header>
                 <!--End of Header Area-->
 
@@ -347,9 +335,36 @@
 
                 {% endblock %}
                 <br>
+                {% set is_auth = request.state.is_authenticated and request.state.user %}
+                {% set feedback_next = request.url.path ~ (('?' ~ request.url.query) if request.url.query else '') %}
+
+                <!--Footer Feedback Area Start-->
+                <div class="row">
+                    <div class="col-12 col-md-4 offset-md-4 text-center mb-4">
+                        {% if is_auth %}
+                        <button type="button"
+                                class="btn button-in-table-green"
+                                data-toggle="modal"
+                                data-target="#feedbackModal"
+                                style="width: 100%;">
+                            <i class="fa-solid fa-comment"></i> Появились вопросы? <br>Форма обратной связи к Вашим услугам!
+                        </button>
+                        {% else %}
+                        <a class="btn button-in-table-green"
+                           href="/{{ source_lang }}/{{ ui_lang }}/auth/login/?next={{ feedback_next | urlencode }}&amp;msg=feedback_auth"
+                           onclick="document.cookie='flash=feedback_need_login; Path=/; Max-Age=60; SameSite=Lax'"
+                           style="width: 100%">
+                            <i class="fa-solid fa-comment"></i> Появились вопросы? <br>Форма обратной связи к Вашим услугам!
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <!--End of Footer Feedback Area-->
+
                 <!--Footer Widget Area Start-->
                 <div class="footer-widget-area">
                     <div class="container">
+                        <br>
                         <div class="row">
                             <div class="col-lg-3 col-md-6">
                                 <div class="single-footer-widget">
@@ -440,14 +455,14 @@
                     </div>
                 </footer>
                 <!--End of Footer Area-->
-            </div>   
-            <!--End of Bg White--> 
-        </div>    
-        <!--End of Main Wrapper Area--> 
+            </div>
+            <!--End of Bg White-->
+        </div>
+        <!--End of Main Wrapper Area-->
 
         <!-- jquery -->
         <script src="{{ url_for('static', path='js/vendor/jquery-1.12.4.min.js') }}"></script>
-        
+
 		<!-- popper JS -->
         <script src="{{ url_for('static', path='js/popper.min.js') }}"></script>
 
@@ -467,6 +482,186 @@
         <script src="{{ url_for('static', path='js/main.js') }}"></script>
 
         {% block js_scripts %} {% endblock %}
+
+        {% if is_auth %}
+        <div class="modal fade" id="feedbackModal" tabindex="-1" role="dialog" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="feedbackModalLabel">Форма обратной связи</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Закрыть">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <form id="feedbackForm"
+                          method="post"
+                          action="/{{ source_lang }}/{{ ui_lang }}/feedback/"
+                          novalidate>
+                        <div class="modal-body">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="page_url" id="feedbackPageUrl" value="">
+                            <input type="hidden" name="exercise_name" id="feedbackExerciseName" value="">
+
+                            <p class="text-muted">Ваше сообщение будет связано с текущей страницей</p>
+
+                            <div class="form-group">
+                                <label for="feedbackTopic">Выберите тему:</label>
+                                <select class="form-control" id="feedbackTopic" name="topic" required>
+                                    <option value="" selected disabled>Выберите тему</option>
+                                    <option value="Вопрос по программе обучения">Вопрос по программе обучения</option>
+                                    <option value="Вопрос к службе технической поддержки">Вопрос к службе технической поддержки</option>
+                                    <option value="Ошибка в тексте (звуковом файле, видео)">Ошибка в тексте (звуковом файле, видео)</option>
+                                    <option value="Прочие вопросы">Прочие вопросы</option>
+                                </select>
+                                <div class="invalid-feedback">Пожалуйста, выберите тему</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="feedbackMessage">Введите информацию в это поле:</label>
+                                <textarea class="form-control" id="feedbackMessage" name="message" rows="5" required></textarea>
+                                <div class="invalid-feedback">Пожалуйста, введите текст сообщения</div>
+                            </div>
+
+                            <div class="form-group mb-0">
+                                <div>Хотите получить ответ?</div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" value="1" id="feedbackWantReply" name="want_reply">
+                                    <label class="form-check-label" for="feedbackWantReply">Да, хочу получить ответ</label>
+                                </div>
+                            </div>
+
+                            <div id="feedbackFormAlert" class="alert mt-3 mb-0" style="display:none;"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="submit" class="btn button-in-table-green" id="feedbackSubmitBtn">Отправить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <script>
+            (function () {
+                function detectExerciseName() {
+                    var dataEl = document.querySelector("[data-exercise-name]");
+                    if (dataEl && dataEl.getAttribute("data-exercise-name")) {
+                        return dataEl.getAttribute("data-exercise-name");
+                    }
+                    var hidden = document.querySelector("input[name='exercise_name'], input#exercise_name, input[name='exerciseName']");
+                    if (hidden && hidden.value) {
+                        return hidden.value;
+                    }
+                    if (window.currentExerciseName) {
+                        return window.currentExerciseName;
+                    }
+                    if (window.exercise && window.exercise.name) {
+                        return window.exercise.name;
+                    }
+                    var params = new URLSearchParams(window.location.search);
+                    if (params.get("name")) {
+                        return params.get("name");
+                    }
+                    if (params.get("exercise") || params.get("exercise_name")) {
+                        return params.get("exercise") || params.get("exercise_name");
+                    }
+                    var pathMatch = window.location.pathname.match(/exercises?\/([^/]+)/i);
+                    if (pathMatch) {
+                        return decodeURIComponent(pathMatch[1]);
+                    }
+                    return "";
+                }
+
+                function setFlashCookie(value) {
+                    document.cookie = "flash=" + value + "; Path=/; Max-Age=60; SameSite=Lax";
+                }
+
+                function showFormAlert(type, text) {
+                    var box = document.getElementById("feedbackFormAlert");
+                    box.className = "alert mt-3 mb-0 alert-" + type;
+                    box.textContent = text;
+                    box.style.display = "block";
+                }
+
+                function clearValidation(form) {
+                    form.querySelectorAll(".is-invalid").forEach(function (el) {
+                        el.classList.remove("is-invalid");
+                    });
+                }
+
+                function validateForm(form) {
+                    var valid = true;
+                    var topic = form.querySelector("[name='topic']");
+                    var message = form.querySelector("[name='message']");
+                    clearValidation(form);
+                    if (!topic.value) {
+                        topic.classList.add("is-invalid");
+                        valid = false;
+                    }
+                    if (!message.value.trim()) {
+                        message.classList.add("is-invalid");
+                        valid = false;
+                    }
+                    return valid;
+                }
+
+                document.addEventListener("DOMContentLoaded", function () {
+                    var form = document.getElementById("feedbackForm");
+                    if (!form) {
+                        return;
+                    }
+
+                    $("#feedbackModal").on("show.bs.modal", function () {
+                        document.getElementById("feedbackPageUrl").value = window.location.pathname + window.location.search;
+                        document.getElementById("feedbackExerciseName").value = detectExerciseName();
+                        document.getElementById("feedbackFormAlert").style.display = "none";
+                        clearValidation(form);
+                    });
+
+                    form.addEventListener("submit", function (event) {
+                        event.preventDefault();
+                        if (!validateForm(form)) {
+                            return;
+                        }
+
+                        var submitBtn = document.getElementById("feedbackSubmitBtn");
+                        submitBtn.disabled = true;
+
+                        fetch(form.action, {
+                            method: "POST",
+                            body: new FormData(form),
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest"
+                            },
+                            credentials: "same-origin"
+                        }).then(function (response) {
+                            if (response.status === 401) {
+                                setFlashCookie("feedback_need_login");
+                                window.location.href = "/{{ source_lang }}/{{ ui_lang }}/auth/login/?next=" + encodeURIComponent(window.location.pathname + window.location.search) + "&msg=feedback_auth";
+                                return;
+                            }
+                            return response.json().then(function (data) {
+                                if (!response.ok || !data.ok) {
+                                    showFormAlert("danger", data.detail || "Не удалось отправить сообщение.");
+                                    submitBtn.disabled = false;
+                                    return;
+                                }
+                                form.reset();
+                                showFormAlert("success", "Спасибо! Ваше сообщение отправлено.");
+                                setTimeout(function () {
+                                    $("#feedbackModal").modal("hide");
+                                    submitBtn.disabled = false;
+                                    document.getElementById("feedbackFormAlert").style.display = "none";
+                                }, 1200);
+                            });
+                        }).catch(function () {
+                            showFormAlert("danger", "Не удалось отправить сообщение. Попробуйте ещё раз.");
+                            submitBtn.disabled = false;
+                        });
+                    });
+                });
+            })();
+        </script>
 
     </body>
 </html>
