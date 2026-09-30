@@ -18,7 +18,6 @@ from app.repositories.classroom import (
     PLAYER_BY_BLOCK_TYPE,
     TREE_STATUS_COMPLETED,
     TREE_STATUS_CURRENT,
-    TREE_STATUS_LOCKED,
     _first_open_c_index,
     _insert_intensive_blocks,
 )
@@ -213,7 +212,8 @@ class TestDetectPlayerC:
 class TestCTreeStatus:
     def test_first_open_c_index(self):
         blocks = [{"name": "C01"}, {"name": "C02"}, {"name": "C03"}]
-        assert _first_open_c_index(blocks, None) is None
+        # None и пустое множество: закрытых занятий нет — открыт первый блок.
+        assert _first_open_c_index(blocks, None) == 0
         assert _first_open_c_index(blocks, set()) == 0
         assert _first_open_c_index(blocks, {"C01"}) == 1
         assert _first_open_c_index(blocks, {"C01", "C02", "C03"}) == 3
@@ -258,48 +258,12 @@ class TestCTreeStatus:
         assert c_nodes[0]["player"] == "coach_online"
         assert c_nodes[1]["is_clickable"] is True
 
-    def test_without_coach_lessons_c_falls_back_to_cursor(self):
-        lessons = [{"name": "BGRUA1007", "title": "L07", "is_clickable": True}]
-        blocks = [
-            {
-                "name": "BGRUA1_C01",
-                "title": "Coach 1",
-                "block_type": "C",
-                "after_lesson": "BGRUA1007",
-                "sort_order": 1,
-                "file_name": "p1",
-                "is_clickable": True,
-            },
-            {
-                "name": "BGRUA1_C02",
-                "title": "Coach 2",
-                "block_type": "C",
-                "after_lesson": "BGRUA1007",
-                "sort_order": 2,
-                "file_name": "p2",
-                "is_clickable": True,
-            },
-        ]
-        tree = _insert_intensive_blocks(
-            lessons,
-            blocks,
-            progress={"BGRU": {"C": "BGRUA1_C01"}},
-            lang_prefix="BGRU",
-            coach_completed_names=None,
-        )
-        c_nodes = [node for node in tree if node.get("block_type") == "C"]
-        assert [node["tree_status"] for node in c_nodes] == [
-            TREE_STATUS_CURRENT,
-            TREE_STATUS_LOCKED,
-        ]
-        assert c_nodes[1]["lock_reason"] == "sequence"
-
 
 # ---------------------------------------------------------------------------
-# Репозиторий: очередь и курсор C
+# Репозиторий: очередь занятий C
 # ---------------------------------------------------------------------------
 
-class TestCoachQueueAndCursor:
+class TestCoachQueue:
     @pytest.mark.asyncio
     async def test_queue_locks_everything_after_first_open(self, db_pool, create_user):
         course = await _make_c_course(db_pool)
@@ -381,30 +345,6 @@ class TestCoachQueueAndCursor:
             assert updated["open_checkboxes"] == ["q2"]
             started = await coach_session.mark_in_progress(conn, lesson_id)
             assert started["status"] == "in_progress"
-
-    @pytest.mark.asyncio
-    async def test_advance_c_cursor_moves_only_forward(self, db_pool, create_user):
-        course = await _make_c_course(db_pool)
-        student_id = await create_user(role="student")
-        async with db_pool.acquire() as conn:
-            await coach_session.advance_student_c_cursor(
-                conn, student_id, course["first"]
-            )
-            raw = await conn.fetchval(
-                "SELECT intensive_progress FROM users WHERE id = $1", student_id
-            )
-        data = raw if isinstance(raw, dict) else json.loads(raw)
-        assert data["BGRU"]["C"] == course["second"]
-
-        async with db_pool.acquire() as conn:
-            await coach_session.advance_student_c_cursor(
-                conn, student_id, course["first"]
-            )
-            raw = await conn.fetchval(
-                "SELECT intensive_progress FROM users WHERE id = $1", student_id
-            )
-        data = raw if isinstance(raw, dict) else json.loads(raw)
-        assert data["BGRU"]["C"] == course["second"]
 
 
 # ---------------------------------------------------------------------------

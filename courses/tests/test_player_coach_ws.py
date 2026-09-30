@@ -82,6 +82,17 @@ def _isolate_ws_state():
     coach_mod._tickets.clear()
 
 
+@pytest.fixture(autouse=True)
+async def _bind_db_pool(db_pool):
+    """Хендлер берёт пул с app.state, как в проде. Фикстура client не нужна."""
+    previous = getattr(app.state, "db_pool", None)
+    app.state.db_pool = db_pool
+    try:
+        yield
+    finally:
+        app.state.db_pool = previous
+
+
 @pytest.fixture
 async def live_lesson(db_pool, create_user):
     course = await _make_c_course(db_pool, n_blocks=1)
