@@ -550,6 +550,7 @@
                 function detectExerciseName() {
                     var tiHeader = document.querySelector(".exercise-header[data-mode='text_intensive']");
                     var vqtHeader = document.querySelector(".exercise-header[data-mode='vqt']");
+                    var coachOnline = document.getElementById("coachOnlineStatus") || document.getElementById("coachOnlineMount");
 
                     if (tiHeader) {
                         if (window.TextLab && TextLab.currentId) {
@@ -569,6 +570,15 @@
                             return themeCode ? themeCode[1].trim() : subtitleText;
                         }
                         return vqtHeader.getAttribute("data-theme") || "";
+                    }
+
+                    if (coachOnline) {
+                        var currentTheme = document.querySelector(".theme-node.current[data-theme]");
+                        if (currentTheme && currentTheme.getAttribute("data-theme")) {
+                            return currentTheme.getAttribute("data-theme");
+                        }
+                        var coachHeader = document.querySelector("#stickySlot .exercise-header h3");
+                        return textOf(coachHeader);
                     }
 
                     return "";
