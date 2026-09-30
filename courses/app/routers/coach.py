@@ -311,6 +311,52 @@ async def student_coach_block(
     }
 
 
+@router.get("/api/coach/ws-ticket/{lesson_id}")
+async def refresh_ws_ticket(
+    lesson_id: int,
+    pool: DBPoolDep,
+    current_user: CurrentUser,
+):
+    """Новый RAM-ticket для переподключения сокета без перезагрузки страницы.
+
+    Старый ticket после рестарта uvicorn в словаре процесса отсутствует.
+    Клиент не должен долбить мёртвым билетом: сначала этот эндпоинт, потом WS.
+    """
+    if not current_user:
+        return JSONResponse({"error": "auth required"}, status_code=401)
+
+    async with pool.acquire() as conn:
+        lesson = await coach_session.get_lesson(conn, lesson_id)
+        if not lesson:
+            return JSONResponse({"error": "no_lesson", "message": "Занятие не найдено"}, status_code=404)
+        if not coach_session.lesson_accessible(lesson, current_user):
+            return JSONResponse({"error": "forbidden", "message": "Нет доступа к занятию"}, status_code=403)
+        if lesson.get("is_completed"):
+            return JSONResponse(
+                {"error": "completed", "message": "Урок уже закрыт"},
+                status_code=409,
+            )
+        if not coach_session.can_run_lessons(current_user):
+            queue = await coach_session.list_student_queue(
+                conn,
+                coach_session.user_pk(current_user),
+                coach_id=lesson.get("coach_id"),
+            )
+            if not coach_session.student_may_view(lesson, queue):
+                return JSONResponse(
+                    {"error": "locked", "message": "Сначала нужно пройти предыдущий урок с коучем"},
+                    status_code=403,
+                )
+
+    role = viewer_role(current_user, lesson)
+    token = _issue_ticket(current_user, lesson_id, role)
+    return {
+        "ticket": token,
+        "lesson_id": lesson_id,
+        "role": role,
+    }
+
+
 def _ws_pool(websocket: WebSocket):
     """Пул БД нельзя брать через DBPoolDep: get_db_pool() требует Request.
 

@@ -22,7 +22,7 @@ from app.main import app
 from app.routers import coach as coach_mod
 from app.routers.coach import _issue_ticket, coach_lesson_ws, hub
 
-from .conftest import paid_private_lesson_item
+from .conftest import login_as, paid_private_lesson_item
 from .test_player_coach import FAKE_HTML, _add_lesson, _make_c_course
 
 
@@ -256,3 +256,91 @@ class TestCoachWebsocketProtocol:
         assert ws.accepted is False
         assert ws.sent == []
         assert lesson_id not in hub.rooms or not hub.rooms[lesson_id]
+
+
+class TestRefreshWsTicket:
+    """GET /api/coach/ws-ticket/{lesson_id} — свежий RAM-ticket без перезагрузки."""
+
+    @pytest.mark.asyncio
+    async def test_anonymous_gets_401(self, client, live_lesson):
+        res = await client.get(f"/api/coach/ws-ticket/{live_lesson['lesson_id']}")
+        assert res.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_other_coach_gets_403(self, client, db_pool, live_lesson, create_user):
+        stranger = await create_user(role="coach")
+        await login_as(client, db_pool, stranger)
+        res = await client.get(f"/api/coach/ws-ticket/{live_lesson['lesson_id']}")
+        assert res.status_code == 403
+        assert res.json()["error"] == "forbidden"
+
+    @pytest.mark.asyncio
+    async def test_coach_receives_ticket_that_opens_ws(self, client, db_pool, live_lesson):
+        lesson_id = live_lesson["lesson_id"]
+        await login_as(client, db_pool, live_lesson["coach_id"])
+        res = await client.get(f"/api/coach/ws-ticket/{lesson_id}")
+        assert res.status_code == 200, res.text
+        body = res.json()
+        assert body["lesson_id"] == lesson_id
+        assert body["role"] == "coach"
+        assert body["ticket"]
+        assert body["ticket"] in coach_mod._tickets
+
+        ws = FakeWebSocket(body["ticket"])
+        with patch("app.routers.coach.load_html_block", return_value=FAKE_HTML):
+            task = await _run_ws(ws, lesson_id)
+            await _wait_until(lambda: ws.sent)
+            await ws.push(None)
+            await task
+        assert ws.accepted is True
+        assert ws.sent[0]["role"] == "coach"
+
+    @pytest.mark.asyncio
+    async def test_student_receives_ticket_after_ram_flush(self, client, db_pool, live_lesson):
+        lesson_id = live_lesson["lesson_id"]
+        await login_as(client, db_pool, live_lesson["student_id"])
+        first = await client.get(f"/api/coach/ws-ticket/{lesson_id}")
+        assert first.status_code == 200
+        old_ticket = first.json()["ticket"]
+        coach_mod._tickets.clear()
+        second = await client.get(f"/api/coach/ws-ticket/{lesson_id}")
+        assert second.status_code == 200
+        new_ticket = second.json()["ticket"]
+        assert new_ticket
+        assert new_ticket != old_ticket
+        assert old_ticket not in coach_mod._tickets
+        assert new_ticket in coach_mod._tickets
+
+        ws = FakeWebSocket(old_ticket)
+        task = await _run_ws(ws, lesson_id)
+        await _wait_until(lambda: ws.closed == 4401)
+        await task
+        assert ws.accepted is False
+
+        ws2 = FakeWebSocket(new_ticket)
+        with patch("app.routers.coach.load_html_block", return_value=FAKE_HTML):
+            task2 = await _run_ws(ws2, lesson_id)
+            await _wait_until(lambda: ws2.sent)
+            await ws2.push(None)
+            await task2
+        assert ws2.accepted is True
+        assert ws2.sent[0]["role"] == "student"
+
+    @pytest.mark.asyncio
+    async def test_completed_lesson_returns_409(self, client, db_pool, create_user):
+        course = await _make_c_course(db_pool, n_blocks=1)
+        student_id = await create_user(role="student")
+        coach_id = await create_user(role="coach")
+        item_id = await paid_private_lesson_item(db_pool, student_id)
+        lesson_id = await _add_lesson(
+            db_pool,
+            student_id=student_id,
+            coach_id=coach_id,
+            order_item_id=item_id,
+            lesson_name=course["first"],
+            status="completed",
+        )
+        await login_as(client, db_pool, coach_id)
+        res = await client.get(f"/api/coach/ws-ticket/{lesson_id}")
+        assert res.status_code == 409
+        assert res.json()["error"] == "completed"

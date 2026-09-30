@@ -89,9 +89,12 @@
     if (!root) return;
     const role = root.dataset.role || 'coach';
     const lessonId = root.dataset.lessonId;
-    const ticket = root.dataset.ticket;
+    let ticket = root.dataset.ticket || '';
     let opened = new Set({{ open_checkboxes | tojson }});
     let allOpen = {{ 'true' if lesson.is_completed else 'false' }};
+    let stopped = allOpen || !lessonId;
+    let reconnectTimer = null;
+    let attempt = 0;
 
     function collectIds() {
         return Array.from(root.querySelectorAll('span[data-checkbox]'))
@@ -135,15 +138,89 @@
         el.className = cls || 'text-secondary';
     }
 
-    function connect() {
+    function freezeLesson() {
+        allOpen = true;
+        opened = new Set(collectIds());
+        root.querySelectorAll('span[data-checkbox] input').forEach((input) => {
+            input.disabled = true;
+        });
+        apply();
+        setStatus('урок закрыт', 'text-success');
+        stopSocket();
+    }
+
+    function stopSocket() {
+        stopped = true;
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+        const ws = root._ws;
+        if (ws && ws.readyState < 2) {
+            ws.onclose = null;
+            ws.close();
+        }
+    }
+
+    function scheduleReconnect() {
+        if (stopped) return;
+        const delay = Math.min(1500 * Math.pow(1.4, attempt), 12000);
+        attempt += 1;
+        setStatus('нет связи, повтор…', 'text-danger');
+        reconnectTimer = setTimeout(connect, delay);
+    }
+
+    async function refreshTicket() {
+        const res = await fetch('/api/coach/ws-ticket/' + encodeURIComponent(lessonId), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (res.status === 409) return 'completed';
+        if (!res.ok) return '';
+        const data = await res.json().catch(() => ({}));
+        return data.ticket || '';
+    }
+
+    async function connect() {
+        if (stopped) return;
+        if (!ticket) {
+            const fresh = await refreshTicket();
+            if (stopped) return;
+            if (fresh === 'completed') {
+                freezeLesson();
+                return;
+            }
+            if (!fresh) {
+                scheduleReconnect();
+                return;
+            }
+            ticket = fresh;
+            root.dataset.ticket = ticket;
+        }
         const proto = location.protocol === 'https:' ? 'wss' : 'ws';
         const url = proto + '://' + location.host + '/api/coach/ws/' + lessonId +
             '?ticket=' + encodeURIComponent(ticket);
         const ws = new WebSocket(url);
-        ws.onopen = function () { setStatus('онлайн', 'text-success'); };
-        ws.onclose = function () {
-            setStatus('нет связи, повтор…', 'text-danger');
-            setTimeout(connect, 1500);
+        root._ws = ws;
+        ws.onopen = function () {
+            attempt = 0;
+            setStatus('онлайн', 'text-success');
+        };
+        ws.onclose = function (event) {
+            if (stopped) return;
+            if (event.code === 4403 || allOpen) {
+                freezeLesson();
+                return;
+            }
+            if (event.code === 4404) {
+                stopSocket();
+                setStatus('занятие не найдено', 'text-danger');
+                return;
+            }
+            // Отказ до accept приходит как 403/1006: этот ticket уже бесполезен.
+            ticket = '';
+            root.dataset.ticket = '';
+            scheduleReconnect();
         };
         ws.onerror = function () { setStatus('ошибка сокета', 'text-danger'); };
         ws.onmessage = function (event) {
@@ -152,26 +229,18 @@
             if (data.type === 'state' && Array.isArray(data.open_checkboxes)) {
                 opened = new Set(data.open_checkboxes.map(String));
                 if (data.all_open || data.status === 'completed') {
-                    allOpen = true;
-                    opened = new Set(collectIds());
-                    root.querySelectorAll('span[data-checkbox] input').forEach((input) => {
-                        input.disabled = true;
-                    });
+                    freezeLesson();
+                    return;
                 }
                 apply();
             }
             if (data.type === 'completed') {
-                allOpen = true;
-                opened = new Set(collectIds());
-                root.querySelectorAll('span[data-checkbox] input').forEach((input) => {
-                    input.disabled = true;
-                });
-                apply();
-                setStatus('урок закрыт', 'text-success');
+                freezeLesson();
             }
         };
-        root._ws = ws;
     }
+
+    window.addEventListener('pagehide', stopSocket);
 
     root.addEventListener('change', function (event) {
         const input = event.target;

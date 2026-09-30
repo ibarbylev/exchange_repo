@@ -189,35 +189,112 @@
 
             apply();
 
-            if (allOpen || !data.lesson_id || !data.ws_ticket) {
+            if (typeof mount._coachWsStop === 'function') {
+                mount._coachWsStop();
+            }
+
+            if (allOpen || !data.lesson_id) {
                 return;
             }
 
-            const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-            const url = proto + '://' + location.host + '/api/coach/ws/' + data.lesson_id +
-                '?ticket=' + encodeURIComponent(data.ws_ticket);
-            const ws = new WebSocket(url);
+            const lessonId = data.lesson_id;
+            let ticket = data.ws_ticket || '';
+            let stopped = false;
+            let reconnectTimer = null;
+            let attempt = 0;
+            let socket = null;
+
+            function stopSocket() {
+                stopped = true;
+                if (reconnectTimer) {
+                    clearTimeout(reconnectTimer);
+                    reconnectTimer = null;
+                }
+                if (socket && socket.readyState < 2) {
+                    socket.onclose = null;
+                    socket.close();
+                }
+            }
+            mount._coachWsStop = stopSocket;
+
             function freezeLesson() {
                 allOpen = true;
                 opened = new Set(collectIds());
                 apply();
-                if (ws.readyState < 2) ws.close();
+                stopSocket();
             }
-            ws.onmessage = function (event) {
-                let payload;
-                try { payload = JSON.parse(event.data); } catch (e) { return; }
-                if (payload.type === 'state' && Array.isArray(payload.open_checkboxes)) {
-                    opened = new Set(payload.open_checkboxes.map(String));
-                    if (payload.all_open || payload.status === 'completed') {
+
+            function scheduleReconnect() {
+                if (stopped) return;
+                const delay = Math.min(1500 * Math.pow(1.4, attempt), 12000);
+                attempt += 1;
+                reconnectTimer = setTimeout(connect, delay);
+            }
+
+            async function refreshTicket() {
+                const res = await fetch('/api/coach/ws-ticket/' + encodeURIComponent(lessonId), {
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (res.status === 409) return 'completed';
+                if (!res.ok) return '';
+                const payload = await res.json().catch(() => ({}));
+                return payload.ticket || '';
+            }
+
+            async function connect() {
+                if (stopped) return;
+                if (!ticket) {
+                    const fresh = await refreshTicket();
+                    if (stopped) return;
+                    if (fresh === 'completed') {
                         freezeLesson();
                         return;
                     }
-                    apply();
+                    if (!fresh) {
+                        scheduleReconnect();
+                        return;
+                    }
+                    ticket = fresh;
                 }
-                if (payload.type === 'completed') {
-                    freezeLesson();
-                }
-            };
+                const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+                const url = proto + '://' + location.host + '/api/coach/ws/' + lessonId +
+                    '?ticket=' + encodeURIComponent(ticket);
+                const ws = new WebSocket(url);
+                socket = ws;
+                ws.onopen = function () { attempt = 0; };
+                ws.onclose = function (event) {
+                    if (stopped) return;
+                    if (event.code === 4403 || allOpen) {
+                        freezeLesson();
+                        return;
+                    }
+                    if (event.code === 4404) {
+                        stopSocket();
+                        return;
+                    }
+                    ticket = '';
+                    scheduleReconnect();
+                };
+                ws.onmessage = function (event) {
+                    let payload;
+                    try { payload = JSON.parse(event.data); } catch (e) { return; }
+                    if (payload.type === 'state' && Array.isArray(payload.open_checkboxes)) {
+                        opened = new Set(payload.open_checkboxes.map(String));
+                        if (payload.all_open || payload.status === 'completed') {
+                            freezeLesson();
+                            return;
+                        }
+                        apply();
+                    }
+                    if (payload.type === 'completed') {
+                        freezeLesson();
+                    }
+                };
+            }
+
+            window.addEventListener('pagehide', stopSocket);
+            connect();
         }
     };
 </script>
