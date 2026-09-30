@@ -12,6 +12,7 @@ from app.middleware.csrf import verify_csrf
 from app.repositories import coach_schedule
 from app.repositories.user import create_user_session
 from app.repositories.shop import pay_order, replenish_balance_and_pay_order
+from app.routers.feedback import FEEDBACK_TOPICS
 
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -1014,14 +1015,6 @@ async def coach_update_lesson(
 
 # ==================== Feedback ====================
 
-FEEDBACK_TOPICS = (
-    "Вопрос по программе обучения",
-    "Вопрос к службе технической поддержки",
-    "Ошибка в тексте (звуковом файле, видео)",
-    "Прочие вопросы",
-)
-
-
 def _feedback_as_bool(value: str | None) -> bool:
     if value is None:
         return False
@@ -1058,7 +1051,7 @@ async def admin_feedback_page(
     request: Request,
     pool: DBPoolDep,
     current_superuser: CurrentSuperUser = None,
-    status: str = Query("all"),
+    status: str = Query("open"),
     want_reply: str | None = Query(None),
     q: str | None = Query(None),
     page: int = Query(1, ge=1),

@@ -39,11 +39,11 @@ def _as_bool(value: str | None) -> bool:
 
 
 def _notify_email() -> str:
-    return (
-        getattr(settings, "FEEDBACK_NOTIFY_EMAIL", "")
-        or getattr(settings, "SMTP_FROM_EMAIL", "")
-        or getattr(settings, "SMTP_USER", "")
-    )
+    for attr in ("FEEDBACK_NOTIFY_EMAIL", "SMTP_FROM_EMAIL", "SMTP_USER"):
+        value = str(getattr(settings, attr, "") or "").strip()
+        if value:
+            return value
+    return ""
 
 
 async def _notify_admin(
