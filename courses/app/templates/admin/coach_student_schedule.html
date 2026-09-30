@@ -1,0 +1,663 @@
+{% extends "admin/admin_base_page.html" %}
+
+{% block title %}Расписание студент–коуч{% endblock %}
+
+{% block extra_head %}
+<style>
+    .hint-list {
+        position: absolute;
+        z-index: 20;
+        left: 0;
+        right: 0;
+        max-height: 240px;
+        overflow-y: auto;
+    }
+    .hint-item { cursor: pointer; }
+    .hint-item:hover { background: #e9f5d8; }
+    .week-table th,
+    .week-table td {
+        width: 14.28%;
+        vertical-align: top;
+        font-variant-numeric: tabular-nums;
+    }
+    .week-table th { text-align: center; }
+    .week-cell-empty { background: #f8f9fa; min-height: 72px; }
+    .week-lesson {
+        background: #e9f5d8;
+        border: 1px solid #c5e1a5;
+        border-radius: 6px;
+        padding: 6px 8px;
+        margin-bottom: 6px;
+    }
+    .week-lesson .lesson-date { font-size: .8rem; color: #556; }
+    .week-lesson .lesson-time { font-weight: 600; }
+    .date-picker-icon {
+        max-width: 2.75rem;
+        padding-left: 0.35rem;
+        padding-right: 0.35rem;
+        cursor: pointer;
+    }
+    .date-picker-icon::-webkit-datetime-edit {
+        display: none;
+    }
+    .date-picker-icon::-webkit-calendar-picker-indicator {
+        cursor: pointer;
+        width: 1.25rem;
+        height: 1.25rem;
+        margin: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 1280px;">
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div>
+            <h2 class="mb-1">Расписание студент–коуч</h2>
+            <p class="text-muted mb-0">Назначение коуча и ручная расстановка занятий.</p>
+        </div>
+        <div class="btn-group" role="group">
+            <a class="btn btn-{{ 'success' if mode == 'assign' else 'outline-secondary' }}"
+               href="/admin/coach-student-schedule/?mode=assign&assignment={{ assignment }}">
+                <i class="bi bi-person-plus me-1"></i> Назначение коуча
+            </a>
+            <a class="btn btn-{{ 'success' if mode == 'schedule' else 'outline-secondary' }}"
+               href="/admin/coach-student-schedule/?mode=schedule&assignment=assigned">
+                <i class="bi bi-calendar3 me-1"></i> Корректировка расписания
+            </a>
+        </div>
+    </div>
+
+    {% if success %}
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle me-2"></i>
+            {% if success.startswith('created:') %}
+                Добавлено занятий: {{ success.split(':')[1] }}.
+            {% elif success == 'updated' %}
+                Занятие обновлено.
+            {% else %}
+                Сохранено.
+            {% endif %}
+        </div>
+    {% endif %}
+
+    {% if error %}
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>{{ error }}
+        </div>
+    {% endif %}
+
+    {% if mode == 'assign' %}
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white">
+            Назначение коуча и создание слотов
+        </div>
+        <div class="card-body">
+            <form method="GET" class="row g-3 mb-4">
+                <input type="hidden" name="mode" value="assign">
+                <div class="col-md-4">
+                    <label class="form-label">Фильтр студентов</label>
+                    <select name="assignment" class="form-select" onchange="this.form.submit()">
+                        <option value="new" {% if assignment == 'new' %}selected{% endif %}>Новые (ещё без строк)</option>
+                        <option value="assigned" {% if assignment == 'assigned' %}selected{% endif %}>Уже назначенные</option>
+                        <option value="all" {% if assignment == 'all' %}selected{% endif %}>Все оплатившие</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label">Студент (оплатил private-lesson-)</label>
+                    <select name="student_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">— выберите студента —</option>
+                        {% for s in students %}
+                            <option value="{{ s.id }}" {% if student_id == s.id %}selected{% endif %}>
+                                {{ s.name }} · {{ s.email }}
+                                · строк: {{ s.lessons_created }}
+                                · проведено: {{ s.lessons_completed }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </form>
+
+            {% if not students %}
+                <div class="alert alert-warning mb-0">
+                    В этом фильтре нет студентов с оплаченным продуктом <code>private-lesson-*</code>.
+                </div>
+            {% elif not student_id %}
+                <div class="alert alert-info mb-0">Выберите студента, чтобы создать слоты.</div>
+            {% else %}
+
+            <form method="POST" action="/admin/coach-student-schedule/create/" id="createForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="student_id" value="{{ student_id }}">
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Коуч</label>
+                        <select name="coach_id" class="form-select" required>
+                            <option value="">— выберите коуча —</option>
+                            {% for c in coaches %}
+                                <option value="{{ c.id }}">
+                                    {{ c.name }} · {{ c.email }}
+                                    {% if c.role == 'admin' %}(admin){% endif %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Оплаченная позиция заказа</label>
+                        <select name="order_item_id" class="form-select" required>
+                            <option value="">— выберите позицию —</option>
+                            {% for item in order_items %}
+                                <option value="{{ item.id }}">
+                                    #{{ item.id }} · {{ item.product_name }}
+                                    · qty {{ item.quantity }}
+                                    · уже строк {{ item.slots_created }}
+                                    · {{ item.created_at }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Число занятий</label>
+                        <input type="number" name="lessons_count" id="lessonsCount"
+                               class="form-control" min="1" max="40" value="7" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Дата старта</label>
+                        <div class="input-group">
+                            <input type="text" id="startDateDisplay" class="form-control"
+                                   placeholder="дд.мм.гггг" inputmode="numeric"
+                                   pattern="^\d{2}\.\d{2}\.\d{4}$" autocomplete="off">
+                            <input type="date" id="startDatePicker" class="form-control date-picker-icon"
+                                   title="Календарь" lang="ru">
+                        </div>
+                        <input type="hidden" name="start_date" id="startDate">
+                        <div class="form-text">дд.мм.гггг или календарь справа</div>
+                    </div>
+                    <div class="col-md-6 position-relative">
+                        <label class="form-label">Первый урок (подсказка по префиксу курса)</label>
+                        <input type="text" name="first_lesson_name" id="firstLesson"
+                               class="form-control" placeholder="Начните с BGRUA1"
+                               autocomplete="off" required>
+                        <div id="hintBox" class="list-group hint-list shadow-sm d-none"></div>
+                        <div class="form-text">
+                            Незанятые блоки C этого курса, по возрастанию имени.
+                            Остальные имена подставятся автоматически.
+                        </div>
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label">Периодичность</label>
+                        <select name="times_per_week" id="timesPerWeek" class="form-select">
+                            <option value="1">1 раз в неделю</option>
+                            <option value="2">2 раза в неделю</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">День 1</label>
+                        <select name="weekday_1" id="weekday1" class="form-select">
+                            <option value="">—</option>
+                            {% for num, title in weekday_names.items() %}
+                                <option value="{{ num }}">{{ title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Время дня 1 (24 ч)</label>
+                        <input type="text" name="time_1" id="time1" class="form-control"
+                               value="18:00" placeholder="18:00" inputmode="numeric"
+                               pattern="^([01]\d|2[0-3]):[0-5]\d$" autocomplete="off">
+                    </div>
+                    <div class="col-md-3"></div>
+
+                    <div class="col-md-3 offset-md-3 day2">
+                        <label class="form-label">День 2</label>
+                        <select name="weekday_2" id="weekday2" class="form-select" disabled>
+                            <option value="">—</option>
+                            {% for num, title in weekday_names.items() %}
+                                <option value="{{ num }}">{{ title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 day2">
+                        <label class="form-label">Время дня 2 (24 ч)</label>
+                        <input type="text" name="time_2" id="time2" class="form-control"
+                               value="18:00" placeholder="18:00" inputmode="numeric"
+                               pattern="^([01]\d|2[0-3]):[0-5]\d$" autocomplete="off" disabled>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <button type="button" class="btn btn-outline-secondary" id="previewBtn">
+                        <i class="bi bi-eye me-1"></i> Предпросмотр по неделям
+                    </button>
+                    <button type="submit" class="btn btn-success fw-semibold">
+                        <i class="bi bi-plus-circle me-2"></i> Создать строки
+                    </button>
+                </div>
+            </form>
+
+            <div id="previewWrap" class="mt-4 d-none">
+                <h6 class="mb-2">Что будет записано</h6>
+                <div class="table-responsive">
+                    <table class="table table-bordered week-table mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Пн</th>
+                                <th>Вт</th>
+                                <th>Ср</th>
+                                <th>Чт</th>
+                                <th>Пт</th>
+                                <th>Сб</th>
+                                <th>Вс</th>
+                            </tr>
+                        </thead>
+                        <tbody id="previewBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% else %}
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white">Фильтр расписания</div>
+        <div class="card-body">
+            <form method="GET" class="row g-3">
+                <input type="hidden" name="mode" value="schedule">
+                <input type="hidden" name="assignment" value="assigned">
+                <div class="col-md-5">
+                    <label class="form-label">Студент</label>
+                    <select name="student_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">все студенты</option>
+                        {% for s in students %}
+                            <option value="{{ s.id }}" {% if student_id == s.id %}selected{% endif %}>
+                                {{ s.name }} · {{ s.email }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label">Коуч</label>
+                    <select name="coach_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">все коучи</option>
+                        {% for c in coaches %}
+                            <option value="{{ c.id }}" {% if coach_id == c.id %}selected{% endif %}>
+                                {{ c.name }}{% if c.role == 'admin' %} (admin){% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <a class="btn btn-outline-secondary w-100" href="/admin/coach-student-schedule/?mode=schedule">
+                        Сбросить
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if not lessons %}
+        <div class="alert alert-info">Нет строк расписания по выбранному фильтру.</div>
+    {% else %}
+        <div class="table-responsive">
+            <table class="table table-sm align-middle bg-white shadow-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Студент</th>
+                        <th>Коуч</th>
+                        <th>Урок</th>
+                        <th>Дата</th>
+                        <th>Время</th>
+                        <th>Статус</th>
+                        <th>★</th>
+                        <th>Комментарий</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for lesson in lessons %}
+                    {% set iso = (lesson.scheduled_at or '')[:16] %}
+                    {% set date_dmy = (iso[8:10] ~ '.' ~ iso[5:7] ~ '.' ~ iso[0:4]) if iso|length >= 10 else '' %}
+                    {% set time_hm = iso[11:16] if iso|length >= 16 else '' %}
+                    <tr>
+                        <td class="text-muted">{{ lesson.id }}</td>
+                        <td>
+                            <div>{{ lesson.student_name }}</div>
+                            <div class="small text-muted">{{ lesson.student_email }}</div>
+                        </td>
+                        <td colspan="8">
+                            <form method="POST" action="/admin/coach-student-schedule/update/" class="row g-2 js-update-form">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="lesson_id" value="{{ lesson.id }}">
+                                <input type="hidden" name="student_id" value="{{ student_id or '' }}">
+                                <input type="hidden" name="filter_coach_id" value="{{ coach_id or '' }}">
+                                <input type="hidden" name="scheduled_at" class="js-scheduled-at" value="">
+
+                                <div class="col-lg-2">
+                                    <select name="coach_id" class="form-select form-select-sm">
+                                        <option value="">—</option>
+                                        {% for c in coaches %}
+                                            <option value="{{ c.id }}" {% if lesson.coach_id == c.id %}selected{% endif %}>
+                                                {{ c.name }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-lg-2">
+                                    <input type="text" name="lesson_name" class="form-control form-control-sm"
+                                           value="{{ lesson.lesson_name or '' }}" placeholder="BGRUA1_C01"
+                                           required>
+                                </div>
+                                <div class="col-lg-2">
+                                    <div class="input-group input-group-sm">
+                                        <input type="text" class="form-control js-date"
+                                               value="{{ date_dmy }}" placeholder="дд.мм.гггг"
+                                               pattern="^\d{2}\.\d{2}\.\d{4}$" autocomplete="off">
+                                        <input type="date" class="form-control date-picker-icon js-date-picker"
+                                               value="{{ iso[:10] if iso|length >= 10 else '' }}"
+                                               title="Календарь" lang="ru">
+                                    </div>
+                                </div>
+                                <div class="col-lg-1">
+                                    <input type="text" class="form-control form-control-sm js-time"
+                                           value="{{ time_hm }}" placeholder="18:00"
+                                           pattern="^([01]\d|2[0-3]):[0-5]\d$" autocomplete="off">
+                                </div>
+                                <div class="col-lg-2">
+                                    <select name="status" class="form-select form-select-sm">
+                                        <option value="" {% if not lesson.status %}selected{% endif %}>—</option>
+                                        <option value="scheduled" {% if lesson.status == 'scheduled' %}selected{% endif %}>scheduled</option>
+                                        <option value="in_progress" {% if lesson.status == 'in_progress' %}selected{% endif %}>in_progress</option>
+                                        <option value="completed" {% if lesson.status == 'completed' %}selected{% endif %}>completed</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-1">
+                                    <select name="stars" class="form-select form-select-sm">
+                                        <option value="" {% if not lesson.stars %}selected{% endif %}>—</option>
+                                        <option value="1" {% if lesson.stars == 1 %}selected{% endif %}>1</option>
+                                        <option value="2" {% if lesson.stars == 2 %}selected{% endif %}>2</option>
+                                        <option value="3" {% if lesson.stars == 3 %}selected{% endif %}>3</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-2">
+                                    <input type="text" name="coach_comment" class="form-control form-control-sm"
+                                           value="{{ lesson.coach_comment or '' }}">
+                                </div>
+                                <div class="col-lg-1">
+                                    <button class="btn btn-sm btn-success w-100" type="submit">
+                                        <i class="bi bi-check2"></i>
+                                    </button>
+                                </div>
+                            </form>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function dmyToIso(value) {
+        const raw = (value || '').trim();
+        const m = raw.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+        if (!m) return '';
+        return m[3] + '-' + pad(m[2]) + '-' + pad(m[1]);
+    }
+
+    function isoToDmy(iso) {
+        const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return '';
+        return m[3] + '.' + m[2] + '.' + m[1];
+    }
+
+    function parseTime24(value) {
+        const raw = (value || '').trim();
+        const m = raw.match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+        if (!m) return '';
+        return pad(m[1]) + ':' + m[2];
+    }
+
+    function bindDatePair(textInput, picker) {
+        if (!textInput || !picker) return;
+        picker.addEventListener('change', function () {
+            if (picker.value) textInput.value = isoToDmy(picker.value);
+        });
+        textInput.addEventListener('change', function () {
+            const iso = dmyToIso(textInput.value);
+            if (iso) picker.value = iso;
+        });
+        if (picker.showPicker) {
+            picker.addEventListener('click', function () {
+                try { picker.showPicker(); } catch (e) {}
+            });
+        }
+    }
+
+    document.querySelectorAll('.js-update-form').forEach(function (form) {
+        const dateText = form.querySelector('.js-date');
+        const datePicker = form.querySelector('.js-date-picker');
+        bindDatePair(dateText, datePicker);
+        form.addEventListener('submit', function () {
+            const isoDate = dmyToIso(dateText.value) || datePicker.value;
+            const hm = parseTime24(form.querySelector('.js-time').value);
+            form.querySelector('.js-scheduled-at').value = (isoDate && hm) ? (isoDate + 'T' + hm) : '';
+        });
+    });
+
+    const createForm = document.getElementById('createForm');
+    if (!createForm) return;
+
+    const studentId = {{ student_id or 'null' }};
+    const timesPerWeek = document.getElementById('timesPerWeek');
+    const weekday2 = document.getElementById('weekday2');
+    const time2 = document.getElementById('time2');
+    const firstLesson = document.getElementById('firstLesson');
+    const hintBox = document.getElementById('hintBox');
+    const previewBtn = document.getElementById('previewBtn');
+    const previewWrap = document.getElementById('previewWrap');
+    const previewBody = document.getElementById('previewBody');
+    const startDisplay = document.getElementById('startDateDisplay');
+    const startHidden = document.getElementById('startDate');
+    const startPicker = document.getElementById('startDatePicker');
+    bindDatePair(startDisplay, startPicker);
+
+    function toggleDay2() {
+        const two = timesPerWeek.value === '2';
+        weekday2.disabled = !two;
+        time2.disabled = !two;
+        if (!two) weekday2.value = '';
+    }
+    timesPerWeek.addEventListener('change', toggleDay2);
+    toggleDay2();
+
+    createForm.addEventListener('submit', function (ev) {
+        const iso = dmyToIso(startDisplay.value);
+        startHidden.value = iso;
+        const t1 = parseTime24(document.getElementById('time1').value);
+        document.getElementById('time1').value = t1;
+        if (!time2.disabled) {
+            time2.value = parseTime24(time2.value);
+        }
+        if (startDisplay.value && !iso) {
+            ev.preventDefault();
+            alert('Дата старта: дд.мм.гггг');
+        }
+    });
+
+    let hintTimer = null;
+    firstLesson.addEventListener('input', function () {
+        clearTimeout(hintTimer);
+        const prefix = firstLesson.value.trim();
+        if (prefix.length < 4) {
+            hintBox.classList.add('d-none');
+            hintBox.innerHTML = '';
+            return;
+        }
+        hintTimer = setTimeout(function () {
+            fetch('/admin/coach-student-schedule/lesson-hints/?prefix=' + encodeURIComponent(prefix) + '&student_id=' + studentId)
+                .then(function (r) { return r.json(); })
+                .then(function (items) {
+                    if (!items.length) {
+                        hintBox.classList.add('d-none');
+                        hintBox.innerHTML = '';
+                        return;
+                    }
+                    hintBox.innerHTML = items.map(function (item) {
+                        const title = item.title ? ' — ' + item.title : '';
+                        return '<button type="button" class="list-group-item list-group-item-action hint-item" data-name="' +
+                            item.name + '"><code>' + item.name + '</code>' + title + '</button>';
+                    }).join('');
+                    hintBox.classList.remove('d-none');
+                });
+        }, 200);
+    });
+
+    hintBox.addEventListener('click', function (ev) {
+        const btn = ev.target.closest('[data-name]');
+        if (!btn) return;
+        firstLesson.value = btn.getAttribute('data-name');
+        hintBox.classList.add('d-none');
+    });
+
+    document.addEventListener('click', function (ev) {
+        if (!hintBox.contains(ev.target) && ev.target !== firstLesson) {
+            hintBox.classList.add('d-none');
+        }
+    });
+
+    function buildDates(count, startIso, days) {
+        if (!startIso || !days.length) return Array(count).fill(null);
+        const byDay = {};
+        days.forEach(function (d) { byDay[d.weekday] = d.time; });
+        const start = new Date(startIso + 'T00:00:00');
+        const out = [];
+        const cursor = new Date(start);
+        const limit = new Date(start);
+        limit.setDate(limit.getDate() + 370);
+        while (out.length < count && cursor <= limit) {
+            const iso = cursor.getDay() === 0 ? 7 : cursor.getDay();
+            if (byDay[iso]) {
+                const parts = byDay[iso].split(':');
+                const stamp = new Date(cursor);
+                stamp.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
+                out.push(stamp);
+            }
+            cursor.setDate(cursor.getDate() + 1);
+        }
+        while (out.length < count) out.push(null);
+        return out;
+    }
+
+    function mondayOf(dt) {
+        const copy = new Date(dt);
+        const iso = copy.getDay() === 0 ? 7 : copy.getDay();
+        copy.setDate(copy.getDate() - (iso - 1));
+        copy.setHours(0, 0, 0, 0);
+        return copy;
+    }
+
+    function renderWeekTable(items) {
+        const dated = items.filter(function (x) { return x.dt; });
+        previewBody.innerHTML = '';
+        if (!dated.length) {
+            previewBody.innerHTML = '<tr><td colspan="7" class="text-muted">Нет дат — укажите дату старта, день и время.</td></tr>';
+            return;
+        }
+        const first = mondayOf(dated[0].dt);
+        const last = dated[dated.length - 1].dt;
+        const byKey = {};
+        dated.forEach(function (item) {
+            const key = item.dt.getFullYear() + '-' + pad(item.dt.getMonth() + 1) + '-' + pad(item.dt.getDate());
+            if (!byKey[key]) byKey[key] = [];
+            byKey[key].push(item);
+        });
+
+        const cursor = new Date(first);
+        while (cursor <= last) {
+            let html = '<tr>';
+            for (let i = 0; i < 7; i++) {
+                const key = cursor.getFullYear() + '-' + pad(cursor.getMonth() + 1) + '-' + pad(cursor.getDate());
+                const lessons = byKey[key] || [];
+                if (!lessons.length) {
+                    html += '<td class="week-cell-empty"></td>';
+                } else {
+                    html += '<td>' + lessons.map(function (item) {
+                        return '<div class="week-lesson">' +
+                            '<div class="lesson-date">' + isoToDmy(key) + '</div>' +
+                            '<div class="lesson-time">' + pad(item.dt.getHours()) + ':' + pad(item.dt.getMinutes()) + '</div>' +
+                            '<div><code>' + (item.name || '—') + '</code></div>' +
+                            '</div>';
+                    }).join('') + '</td>';
+                }
+                cursor.setDate(cursor.getDate() + 1);
+            }
+            html += '</tr>';
+            previewBody.insertAdjacentHTML('beforeend', html);
+        }
+    }
+
+    previewBtn.addEventListener('click', function () {
+        const count = Number(document.getElementById('lessonsCount').value || 0);
+        const startIso = dmyToIso(startDisplay.value);
+        startHidden.value = startIso;
+        const days = [];
+        const w1 = document.getElementById('weekday1').value;
+        const t1 = parseTime24(document.getElementById('time1').value);
+        if (w1 && t1) days.push({ weekday: Number(w1), time: t1 });
+        if (timesPerWeek.value === '2') {
+            const w2 = weekday2.value;
+            const t2 = parseTime24(time2.value);
+            if (w2 && t2) days.push({ weekday: Number(w2), time: t2 });
+        }
+        const dates = buildDates(count, startIso, days);
+        const prefix = firstLesson.value.trim();
+        const url = '/admin/coach-student-schedule/lesson-hints/?prefix=' +
+            encodeURIComponent(prefix.split('_')[0] || prefix) + '&student_id=' + studentId;
+
+        const apply = function (names) {
+            const items = [];
+            for (let i = 0; i < count; i++) {
+                items.push({
+                    dt: dates[i],
+                    name: names[i] || (i === 0 ? prefix : '')
+                });
+            }
+            renderWeekTable(items);
+            previewWrap.classList.remove('d-none');
+        };
+
+        if (!prefix) {
+            apply([]);
+            return;
+        }
+        fetch(url).then(function (r) { return r.json(); }).then(function (items) {
+            const names = items.map(function (x) { return x.name; });
+            let startIdx = names.indexOf(prefix);
+            if (startIdx < 0) {
+                startIdx = names.findIndex(function (n) { return n >= prefix; });
+                if (startIdx < 0) startIdx = names.length;
+                apply([prefix].concat(names.slice(startIdx, startIdx + count - 1)));
+            } else {
+                apply(names.slice(startIdx, startIdx + count));
+            }
+        }).catch(function () { apply([]); });
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,198 @@
+{% extends "coach/base.html" %}
+
+{% block title %}Урок: {{ lesson.lesson_title or lesson.lesson_name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .projector-doc b,
+    .projector-doc strong {
+        font-weight: 700 !important;
+    }
+    .projector-doc i,
+    .projector-doc em {
+        font-style: italic !important;
+    }
+    .projector-doc [data-block].coach-preview {
+        color: #b0b0b0 !important;
+        opacity: 0.72;
+    }
+    .projector-doc [data-block].coach-preview * { color: inherit !important; }
+    .projector-doc [data-block].coach-preview b,
+    .projector-doc [data-block].coach-preview strong {
+        font-weight: 700 !important;
+    }
+    .projector-doc [data-block].is-open { color: inherit; opacity: 1; }
+    .projector-doc [data-block].student-hidden { visibility: hidden; }
+    .projector-doc span[data-checkbox] {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+    .projector-doc span[data-checkbox] input {
+        width: 1.05rem;
+        height: 1.05rem;
+        cursor: pointer;
+    }
+    .lesson-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: #fff;
+        border: 1px solid #d9e2d4;
+        border-radius: 8px;
+        padding: 12px 16px;
+        margin-bottom: 16px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 1100px;">
+    <div class="lesson-toolbar d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+            <a class="small text-decoration-none"
+               href="/{{ source_lang }}/{{ ui_lang }}/coach/?student_id={{ lesson.student_id }}">← к очереди</a>
+            <h4 class="mb-0">{{ lesson.lesson_title or lesson.lesson_name }}</h4>
+            <div class="text-muted small">
+                Студент: {{ lesson.student_name }}
+                · открыто: <span id="openCountLabel">{{ (open_checkboxes or [])|length }}</span>
+                · <span id="wsStatus" class="text-secondary">соединение…</span>
+            </div>
+        </div>
+        {% if not lesson.is_completed %}
+        <form method="post"
+              action="/{{ source_lang }}/{{ ui_lang }}/coach/lesson/{{ lesson.id }}/complete"
+              onsubmit="return confirm('Закрыть урок и открыть следующий в очереди?');">
+            {% if csrf_token %}
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% endif %}
+            <button class="btn btn-outline-success" type="submit">Завершить урок</button>
+        </form>
+        {% endif %}
+    </div>
+
+    <div id="projectorRoot"
+         class="projector-doc bg-white p-3 rounded shadow-sm"
+         data-role="coach"
+         data-lesson-id="{{ lesson.id }}"
+         data-ticket="{{ ws_ticket }}">
+        {{ projector_html | safe }}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    const root = document.getElementById('projectorRoot');
+    if (!root) return;
+    const role = root.dataset.role || 'coach';
+    const lessonId = root.dataset.lessonId;
+    const ticket = root.dataset.ticket;
+    let opened = new Set({{ open_checkboxes | tojson }});
+    let allOpen = {{ 'true' if lesson.is_completed else 'false' }};
+
+    function collectIds() {
+        return Array.from(root.querySelectorAll('span[data-checkbox]'))
+            .map((span) => String(span.dataset.checkbox || ''))
+            .filter(Boolean);
+    }
+
+    function isOpen(id) {
+        return allOpen || opened.has(String(id));
+    }
+
+    function ensureBoxes() {
+        root.querySelectorAll('span[data-checkbox]').forEach((span) => {
+            if (span.querySelector('input')) return;
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.dataset.checkboxInput = span.dataset.checkbox;
+            if (role !== 'coach' || allOpen) input.disabled = true;
+            span.appendChild(input);
+        });
+    }
+
+    function apply() {
+        root.querySelectorAll('[data-block]').forEach((node) => {
+            const open = isOpen(node.dataset.block);
+            node.classList.toggle('is-open', open);
+            node.classList.toggle('coach-preview', role === 'coach' && !open);
+            node.classList.toggle('student-hidden', role !== 'coach' && !open);
+        });
+        root.querySelectorAll('span[data-checkbox] input').forEach((input) => {
+            input.checked = isOpen(input.dataset.checkboxInput);
+        });
+        const label = document.getElementById('openCountLabel');
+        if (label) label.textContent = String(opened.size);
+    }
+
+    function setStatus(text, cls) {
+        const el = document.getElementById('wsStatus');
+        if (!el) return;
+        el.textContent = text;
+        el.className = cls || 'text-secondary';
+    }
+
+    function connect() {
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+        const url = proto + '://' + location.host + '/api/coach/ws/' + lessonId +
+            '?ticket=' + encodeURIComponent(ticket);
+        const ws = new WebSocket(url);
+        ws.onopen = function () { setStatus('онлайн', 'text-success'); };
+        ws.onclose = function () {
+            setStatus('нет связи, повтор…', 'text-danger');
+            setTimeout(connect, 1500);
+        };
+        ws.onerror = function () { setStatus('ошибка сокета', 'text-danger'); };
+        ws.onmessage = function (event) {
+            let data;
+            try { data = JSON.parse(event.data); } catch (e) { return; }
+            if (data.type === 'state' && Array.isArray(data.open_checkboxes)) {
+                opened = new Set(data.open_checkboxes.map(String));
+                if (data.all_open || data.status === 'completed') {
+                    allOpen = true;
+                    opened = new Set(collectIds());
+                    root.querySelectorAll('span[data-checkbox] input').forEach((input) => {
+                        input.disabled = true;
+                    });
+                }
+                apply();
+            }
+            if (data.type === 'completed') {
+                allOpen = true;
+                opened = new Set(collectIds());
+                root.querySelectorAll('span[data-checkbox] input').forEach((input) => {
+                    input.disabled = true;
+                });
+                apply();
+                setStatus('урок закрыт', 'text-success');
+            }
+        };
+        root._ws = ws;
+    }
+
+    root.addEventListener('change', function (event) {
+        const input = event.target;
+        if (!input || !input.dataset.checkboxInput) return;
+        if (role !== 'coach' || allOpen) return;
+        const id = String(input.dataset.checkboxInput);
+        if (input.checked) opened.add(id);
+        else opened.delete(id);
+        apply();
+        if (root._ws && root._ws.readyState === 1) {
+            root._ws.send(JSON.stringify({
+                type: 'set_checkbox',
+                id: id,
+                open: input.checked
+            }));
+        }
+    });
+
+    ensureBoxes();
+    apply();
+    connect();
+})();
+</script>
+{% endblock %}

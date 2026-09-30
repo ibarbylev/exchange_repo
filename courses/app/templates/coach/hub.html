@@ -1,0 +1,100 @@
+{% extends "coach/base.html" %}
+
+{% block title %}Уроки коуча{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 1180px;">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            <h2 class="mb-1">Онлайн-уроки</h2>
+            <p class="text-muted mb-0">
+                В списке только студенты с незакрытыми занятиями.
+                Открывается первый урок по порядку; следующий — после завершения предыдущего.
+            </p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white fw-semibold">Студенты</div>
+                <div class="list-group list-group-flush">
+                    {% if not students %}
+                        <div class="list-group-item text-muted">Нет незакрытых уроков</div>
+                    {% endif %}
+                    {% for student in students %}
+                        <a class="list-group-item list-group-item-action {% if student_id == student.id %}active{% endif %}"
+                           href="/{{ source_lang }}/{{ ui_lang }}/coach/?student_id={{ student.id }}">
+                            <div class="d-flex justify-content-between">
+                                <strong>{{ student.name }}</strong>
+                                <span class="badge text-bg-success">{{ student.open_count }}</span>
+                            </div>
+                            <div class="small {% if student_id == student.id %}text-white-50{% else %}text-muted{% endif %}">
+                                {{ student.email }}
+                                {% if student.next_at %} · ближайшее {{ student.next_at }}{% endif %}
+                            </div>
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white fw-semibold">Очередь занятий</div>
+                <div class="card-body">
+                    {% if not student_id %}
+                        <p class="text-muted mb-0">Выберите студента слева.</p>
+                    {% elif not queue %}
+                        <p class="text-muted mb-0">У этого студента нет занятий.</p>
+                    {% else %}
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Урок</th>
+                                    <th>Когда</th>
+                                    <th>Статус</th>
+                                    <th></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {% for item in queue %}
+                                    <tr class="{% if item.queue_state == 'current' %}table-success{% elif item.queue_state == 'locked' %}table-light text-muted{% endif %}">
+                                        <td>{{ loop.index }}</td>
+                                        <td>
+                                            <div>{{ item.lesson_title or item.lesson_name or "—" }}</div>
+                                            <div class="small text-muted">{{ item.lesson_name }}</div>
+                                        </td>
+                                        <td>{{ item.scheduled_at or "—" }}</td>
+                                        <td>
+                                            {% if item.queue_state == 'completed' %}закрыт
+                                            {% elif item.queue_state == 'current' %}текущий
+                                            {% else %}ждёт предыдущий
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-end">
+                                            {% if item.can_open %}
+                                                <a class="btn btn-success"
+                                                   href="/{{ source_lang }}/{{ ui_lang }}/coach/lesson/{{ item.id }}">
+                                                    Открыть урок
+                                                </a>
+                                            {% else %}
+                                                <button class="btn btn-outline-secondary" disabled>
+                                                    {% if item.is_completed %}Завершён{% else %}Недоступен{% endif %}
+                                                </button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
