@@ -19,13 +19,17 @@ CREATE TABLE IF NOT EXISTS users (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_login          TIMESTAMPTZ,
-    current_exercise    JSONB NOT NULL DEFAULT '{}'::jsonb, -- прогресс проверяется по языковой паре:
-    intensive_progress  JSONB NOT NULL DEFAULT '{}'::jsonb, -- прогресс проверяется по языковой паре:
-                    -- {
-                    --    "BGRU": {"X": "BGRUA1_text2_…"},
-                    --    "ENRU": {"X": "ENRUA1_text1_…"}
-                    -- }
-                    -- По сути, это прогресс только упражнений TEXT, прогресс coach_lessons ведётся в этой таблицк
+    current_exercise    JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    -- Курсор интерактива V/Q/T по языковой паре. Двигается только вперёд.
+                    -- {"BGRU": {"name": "BGRUA1002_Q001", "at": "2026-10-03T18:02:00+03:00"}}
+                    -- at — время сервера последнего сдвига. Повтор темы at не обновляет.
+                    -- Старое {"BGRU": "BGRUA1002_Q001"} и строка "BGRUA1002_Q001" ещё читаются.
+    intensive_progress  JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    -- Курсор Text Intensive (X) по языковой паре. Двигается только вперёд.
+                    -- {"BGRU": {"X": {"name": "BGRUA1_text2_…", "at": "2026-10-03T18:02:00+03:00"}}}
+                    -- at — время сервера последнего сдвига. Повтор at не обновляет.
+                    -- Прогресс C — таблица coach_lessons, ключ C не пишется.
+                    -- Старое {"BGRU": {"X": "<exercise>"}} и плоский {"X": "..."} ещё читаются.
     exercise_stars      JSONB NOT NULL DEFAULT '{}'::jsonb,  -- json {exercise_name: <1, 2 or 3>}
 
     is_active           BOOLEAN DEFAULT true NOT NULL,
