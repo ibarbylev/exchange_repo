@@ -31,6 +31,14 @@ CREATE TABLE IF NOT EXISTS users (
                     -- Прогресс C — таблица coach_lessons, ключ C не пишется.
                     -- Старое {"BGRU": {"X": "<exercise>"}} и плоский {"X": "..."} ещё читаются.
     exercise_stars      JSONB NOT NULL DEFAULT '{}'::jsonb,  -- json {exercise_name: <1, 2 or 3>}
+    daily_activity      JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    -- Стрик и запасное Q ленивого студента. Новый день — с 07:00 времени сервера.
+                    -- {"streak": 4, "last_on": "2026-10-02", "exercise_current": "BGRUA1015_Q003"}
+                    -- last_on — дата активности (календарный день со сдвигом 07:00), не timestamp.
+                    -- exercise_current пишется только по клику на ссылку индикатора,
+                    -- и только если дневная активность ещё не была. Открытие страницы номер не выдаёт.
+                    -- После прохождения этого Q POST стирает номер, двигает last_on и streak.
+                    -- Устаревшая дата и пустой номер — сигнал эндпойнту ссылки выбрать новое Q.
 
     is_active           BOOLEAN DEFAULT true NOT NULL,
     is_superuser        BOOLEAN DEFAULT false NOT NULL,

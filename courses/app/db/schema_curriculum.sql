@@ -106,6 +106,13 @@ WHERE NOT EXISTS (SELECT 1 FROM courses);
 --    current_exercise    JSONB    -- V/Q/T {"BGRU": {"name": "<exercise>", "at": "<server time>"}}
 --    intensive_progress  JSONB    -- Text X {"BGRU": {"X": {"name": "<exercise>", "at": "<server time>"}}}
 --    exercise_stars      JSONB    -- качество {"<exercise>": 1|2|3}
+--    daily_activity      JSONB    -- стрик и запасное Q
+--      {"streak": 4, "last_on": "2026-10-02", "exercise_current": "BGRUA1015_Q003"}
+--      Новый день — с 07:00 времени сервера. last_on — дата активности, не timestamp.
+--      exercise_current пишется только по клику на ссылку индикатора,
+--      и только пока дневная активность не случилась. Открытие страницы номер не выдаёт.
+--      POST прохождения этого Q стирает номер, двигает last_on и streak.
+--      Устаревшая дата и пустой номер — сигнал эндпойнту ссылки выбрать новое Q.
 --  at пишется только при сдвиге курсора вперёд. Прогресс C — coach_lessons.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS intensive_blocks (
