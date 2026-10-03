@@ -400,10 +400,10 @@
         },
 
         highlightTheme(themeName) {
-            document.querySelectorAll('.theme-node').forEach(n => n.classList.remove('open', 'current'));
+            document.querySelectorAll('.theme-node').forEach(n => n.classList.remove('open'));
             const themeNode = document.querySelector(`.theme-node[data-theme="${themeName}"]`);
             if (!themeNode) return;
-            themeNode.classList.add('open', 'current');
+            themeNode.classList.add('open');
             let parent = themeNode.parentElement;
             while (parent) {
                 if (parent.classList.contains('tree-node')) parent.classList.add('open');
