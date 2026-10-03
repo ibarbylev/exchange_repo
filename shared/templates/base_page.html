@@ -1,0 +1,680 @@
+<!doctype html>
+<html class="no-js" lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="x-ua-compatible" content="ie=edge">
+        <title>{% block title %}I   {% endblock %}</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=0">
+
+        <link rel="shortcut icon" type="image/x-icon" href="{{ url_for('static', path='img/favicon.ico') }}">
+        <link href='https://fonts.googleapis.com/css?family=Raleway:400,300,500,600,700,800' rel='stylesheet' type='text/css'>
+        <link rel="stylesheet" href="{{ url_for('static', path='css/color-switcher.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', path='css/material-design-iconic-font.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', path='css/bootstrap.min.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', path='css/plugins.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', path='css/color.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', path='css/responsive.css') }}">
+
+        <link rel="stylesheet" href="{{ url_for('static', path='css/my-css/my-style.css') }}">
+
+        <script src="{{ url_for('static', path='js/vendor/modernizr-2.8.3.min.js') }}"></script>
+
+        <!-- Add 2 icons in the exercise-tree for Intensive (text_intensive and coach_online:
+            fa-solid fa-person-chalkboard   and  fa-solid fa-chalkboard-user-->
+        <link rel="stylesheet" href="{{ url_for('static', path='fontawesome/css/all.min.css') }}">
+
+        </head>
+    <body>
+{% set flash_cookie = request.cookies.get('flash') %}
+{% if flash_cookie == 'session_kicked' %}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    Ваша сессия была завершена с другого устройства.<br>
+    Пожалуйста, войдите заново.
+    <button type="button" class="close" data-dismiss="alert" aria-label="Закрыть">
+        <span aria-hidden="true">&times;</span>
+    </button>
+</div>
+{% elif flash_cookie == 'feedback_need_login' %}
+<div class="alert alert-info alert-dismissible fade show" role="alert">
+    Чтобы отправить сообщение обратной связи, необходимо войти в аккаунт.
+    <button type="button" class="close" data-dismiss="alert" aria-label="Закрыть">
+        <span aria-hidden="true">&times;</span>
+    </button>
+</div>
+{% elif flash_cookie == 'feedback_sent' %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    Спасибо! Ваше сообщение отправлено.
+    <button type="button" class="close" data-dismiss="alert" aria-label="Закрыть">
+        <span aria-hidden="true">&times;</span>
+    </button>
+</div>
+{% elif flash_cookie == 'feedback_error' %}
+<div class="alert alert-danger alert-dismissible fade show" role="alert">
+    Не удалось отправить сообщение. Заполните тему и текст и попробуйте ещё раз.
+    <button type="button" class="close" data-dismiss="alert" aria-label="Закрыть">
+        <span aria-hidden="true">&times;</span>
+    </button>
+</div>
+{% endif %}
+{% if flash_cookie %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.cookie = "flash=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+        const alertEl = document.querySelector('.alert-dismissible');
+        if (alertEl) {
+            alertEl.addEventListener('closed.bs.alert', function () {
+                document.cookie = "flash=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
+            });
+        }
+    });
+</script>
+{% endif %}
+    <!--[if lt IE 8]>
+            <p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade your browser</a> to improve your experience.</p>
+        <![endif]-->
+
+        <!--Main Wrapper Start-->
+        <div class="as-mainwrapper">
+            <!--Bg White Start-->
+            <div class="bg-white">
+                <!--Header Area Start-->
+                <header>
+                    <div class="header-top">
+                        <div class="container">
+                            <div class="row">
+                                <div class="col-lg-7 col-md-5 d-none d-lg-block d-md-block">
+                                    <span>Have any question? 0123456789</span>
+                                </div>
+                                <div class="col-lg-5 col-md-7 col-12">
+                                    <div class="header-top-right">
+                                        <div class="content">
+                                            {% if request.state.is_authenticated and request.state.user %}
+                                                <i class="zmdi zmdi-account"></i> {{ request.state.user.email }}
+                                                <ul class="account-dropdown">
+                                                    <li><a href="{{ url_for_sheared_assets('logout', source_lang=source_lang, ui_lang=ui_lang) }}">Logout</a></li>
+                                                </ul>
+                                            {% else %}
+                                                <i class="zmdi zmdi-account"></i> My Account
+                                                <ul class="account-dropdown">
+                                                    <li><a href="{{ url_for_sheared_assets('auth_login', source_lang=source_lang, ui_lang=ui_lang) }}">Log In</a></li>
+                                                    <li><a href="{{ url_for_sheared_assets('auth_login', source_lang=source_lang, ui_lang=ui_lang) }}#register">Register</a></li>
+                                                </ul>
+                                            {% endif %}
+                                        </div>
+                                        <div class="content"><a href="#"><i class="zmdi zmdi-favorite"></i> Wishlist</a></div>
+                                        <div class="content"><a href="{{ url_for_sheared_assets('cart', source_lang=source_lang, ui_lang=ui_lang) }}"><i class="zmdi zmdi-shopping-basket"></i>{{ _("Cart") }}</a></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="header-logo-menu sticker">
+                        <div class="container">
+                            <div class="row">
+                                <div class="col-lg-3 col-12">
+                                    <div class="logo">
+                                        <a href="/"><img src="{{ url_for('static', path='img/logo/logo.png') }}" alt="logo" style="margin-top: 8px;"></a>
+                                    </div>
+                                </div>
+                                <div class="col-lg-9 col-12">
+                                    <div class="mainmenu-area pull-right">
+                                        <div class="mainmenu d-none d-lg-block">
+                                            <nav>
+                                                <ul id="nav">
+                                                    <li class="current"><a href="/">Home</a>
+                                                        <ul class="sub-menu">
+                                                            <li><a href="../../translator/app/templates/dictionary.html">На всякий случай 1</a></li>
+                                                            <li><a href="../../translator/app/templates/dictionary.html">На всякий случай 2</a></li>
+                                                            <li><a href="../../translator/app/templates/dictionary.html">На всякий случай 3</a></li>
+                                                        </ul>
+                                                    </li>
+                                                    <li><a href="/">Chat AI</a></li>
+                                                    <li><a href="{{ url_for_sheared_assets('courses_list', source_lang=source_lang, ui_lang=ui_lang) }}">{{ _("OUR COURSES") }}</a></li>
+                                                    <li>
+                                                        <a href="{{ url_for_sheared_assets('classroom', source_lang=source_lang, ui_lang=ui_lang) }}">{{ _("CLASSROOM") }}</a>
+                                                    </li>
+
+                                                    <li><a href="shop-grid.html">Shop</a>
+                                                        <ul class="sub-menu">
+                                                            <li><a href="product-details.html">Product Details</a></li>
+                                                        </ul>
+
+
+                                                    </li>
+                                                    <li><a href="contact.html">Contact</a></li>
+                                                    <li><a href="{{ url_for_sheared_assets('translator', source_lang=source_lang, ui_lang=ui_lang) }}">{{ _("Dictionary") }}</a></li>
+                                                </ul>
+                                            </nav>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Mobile Menu Area start -->
+                    <div class="mobile-menu-area">
+                        <div class="container clearfix">
+                            <div class="row">
+                                <div class="col-lg-12 col-md-12 col-sm-12">
+                                    <div class="mobile-menu">
+                                        <nav id="dropdown">
+                                            <ul>
+                                                <li><a href="../../translator/app/templates/dictionary.html">HOME</a>
+                                                    <ul>
+                                                        <li><a href="../../translator/app/templates/dictionary.html">Slider Style 1</a></li>
+                                                        <li><a href="index-2.html">Slider Style 2</a></li>
+                                                        <li><a href="index-3.html">Background Image</a></li>
+                                                        <li><a href="index-4.html">Image Overlay Light</a></li>
+                                                        <li><a href="index-5.html">Image Overlay Dark</a></li>
+                                                        <li><a href="index-6.html">Menu With Slider</a></li>
+                                                        <li><a href="index-7.html">Menu With Image</a></li>
+                                                        <li><a href="index-8.html">Menu With Overlay</a></li>
+                                                        <li><a href="index-9.html">Video Background</a></li>
+                                                        <li><a href="index-10.html">Fixed Image</a></li>
+                                                        <li><a href="index-11.html">Overlay Fixed Image</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="courses.html">Courses</a>
+                                                    <ul class="sub-menu">
+                                                        <li><a href="shop/courses-details.html">Courses Details</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="shop-grid.html">Shop</a>
+                                                    <ul class="sub-menu">
+                                                        <li><a href="product-details.html">Product Details</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li>
+                                                    <a href="{{ url_for_sheared_assets('classroom', source_lang=source_lang, ui_lang=ui_lang) }}">{{ _("classroom") }}</a>
+                                                </li>
+                                                <li><a href="../../translator/app/templates/dictionary.html">Shortcode</a>
+                                                    <ul class="sub-menu">
+                                                        <li><a href="shortcode-course.html">Courses</a></li>
+                                                        <li><a href="shortcode-event.html">Event</a></li>
+                                                        <li><a href="shortcode-latest-news.html">Latest News</a></li>
+                                                        <li><a href="shortcode-product.html">Product</a></li>
+                                                        <li><a href="shortcode-testimonial.html">Testimonial</a></li>
+                                                        <li><a href="shortcode-contact-form.html">Contact Form</a></li>
+                                                        <li><a href="shortcode-map.html">Map</a></li>
+                                                        <li><a href="shortcode-facts.html">Facts</a></li>
+                                                        <li><a href="image-gallery.html">Image Gallery</a></li>
+                                                        <li><a href="video-gallery.html">Video Gallery</a></li>
+                                                        <li><a href="shortcode-alerts.html">Alerts</a></li>
+                                                        <li><a href="shortcode-button.html">Button</a></li>
+                                                        <li><a href="shortcode-breadcrumbs.html">Breadcrumb</a></li>
+                                                        <li><a href="shortcode-dropdown.html">Dropdown</a></li>
+                                                        <li><a href="shortcode-pagination.html">Pagination</a></li>
+                                                        <li><a href="shortcode-progressbar.html">Progressbar</a></li>
+                                                        <li><a href="text-animation-1.html">Text Animation 1</a></li>
+                                                        <li><a href="text-animation-2.html">Text Animation 2</a></li>
+                                                        <li><a href="text-animation-3.html">Text Animation 3</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="latest-news.html">Latest News</a>
+                                                    <ul class="sub-menu">
+                                                        <li><a href="news-details.html">News Details</a></li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="../../translator/app/templates/dictionary.html">Features</a>
+                                                    <ul class="sub-menu">
+                                                        <li><a href="#">Sliders</a>
+                                                            <ul>
+                                                                <li><a href="slider-style-1.html">Slider Style 1</a></li>
+                                                                <li><a href="slider-style-2.html">Slider Style 2</a></li>
+                                                                <li><a href="slider-style-3.html">Slider Style 3</a></li>
+                                                                <li><a href="background-image.html">Image Background </a></li>
+                                                                <li><a href="image-overlay-light.html">Overlay Light </a></li>
+                                                                <li><a href="image-overlay-dark.html">Overlay Dark </a></li>
+                                                                <li><a href="video-background.html">Video Background </a></li>
+                                                                <li><a href="fixed-image.html">Fixed Image</a></li>
+                                                                <li><a href="overlay-fixed-image.html">Overlay Fixed Image</a></li>
+                                                                <li><a href="text-animation-1.html">Text Animation 1 </a></li>
+                                                                <li><a href="text-animation-2.html">Text Animation 2 </a></li>
+                                                                <li><a href="text-animation-3.html">Text Animation 3 </a></li>
+                                                            </ul>
+                                                        </li>
+                                                        <li><a href="#">Menu Style</a>
+                                                            <ul>
+                                                                <li><a href="theme-menu-1.html">Theme Menu 1</a></li>
+                                                                <li><a href="theme-menu-2.html">Theme Menu 2</a></li>
+                                                                <li><a href="theme-menu-3.html">Theme Menu 3</a></li>
+                                                                <li><a href="without-top-bar.html">Without Top Bar</a></li>
+                                                                <li><a href="menu-center.html">Menu Center</a></li>
+                                                                <li><a href="menu-transparent.html">Transparent</a></li>
+                                                                <li><a href="menu-semi-transparent.html">Semi Transparent</a></li>
+                                                                <li><a href="menu-dark.html">Menu Dark</a></li>
+                                                                <li><a href="borderd-menu.html">Menu Border</a></li>
+                                                                <li><a href="menu-top-border.html">Top Border Hover</a></li>
+                                                                <li><a href="menu-sticky.html">Menu Sticky</a></li>
+                                                                <li><a href="menu-non-sticky.html">Menu Non Sticky</a></li>
+                                                            </ul>
+                                                        </li>
+                                                        <li><a href="#">Page Title</a>
+                                                            <ul>
+                                                                <li><a href="breadcrumb-dark.html">Title Dark</a></li>
+                                                                <li><a href="breadcrumb-fixed.html">Title Fixed</a></li>
+                                                                <li><a href="breadcrumb-image.html">Title Image</a></li>
+                                                                <li><a href="breadcrumb-transparent.html">Title Transparent</a></li>
+                                                                <li><a href="breadcrumb-left.html">Title Left</a></li>
+                                                                <li><a href="breadcrumb-right.html">Title Right</a></li>
+                                                            </ul>
+                                                        </li>
+                                                        <li><a href="#">Footer Style</a>
+                                                            <ul>
+                                                                <li><a href="footer-style-1.html">Footer Style 1</a></li>
+                                                                <li><a href="footer-style-2.html">Footer Style 2</a></li>
+                                                                <li><a href="footer-style-3.html">Footer Style 3</a></li>
+                                                                <li><a href="footer-style-4.html">Footer Style 4</a></li>
+                                                            </ul>
+                                                        </li>
+                                                    </ul>
+                                                </li>
+                                                <li><a href="login-register.html">Login Register</a></li>
+                                                <li><a href="contact.html">Contact us</a></li>
+                                            </ul>
+                                        </nav>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Mobile Menu Area end -->
+                </header>
+                <!--End of Header Area-->
+
+                <!-- Start: Warning: Unpaid pending orders -->
+                {% set pending_order = request.state.pending_order %}
+{% if pending_order %}
+<div class="alert alert-warning alert-dismissible fade show mb-0 py-2" role="alert">
+    <div class="container">
+
+        <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between">
+
+            <!-- Текст -->
+            <div class="mb-3 mb-md-0 pr-md-4 lead">
+                <strong>У вас есть неоплаченный заказ</strong> на сумму
+                <strong>€{{ "%.2f"|format(pending_order.amount) }}</strong>
+                от {{ pending_order.created_at.strftime('%d.%m.%Y') }}.
+            </div>
+
+            <!-- Кнопки -->
+            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center">
+
+                <!-- Кнопка Оплатить -->
+                <a href="{{ url_for_sheared_assets('cart_select_payment_post', source_lang=source_lang, ui_lang=ui_lang) }}"
+                   class="btn button-in-table-green btn-sm mb-2 mb-sm-0 mr-sm-2"
+                   style="width: auto; min-width: 140px;">
+                    Оплатить
+                </a>
+
+                <!-- Кнопка Удалить -->
+                <form action="{{ url_for_sheared_assets('cancel_pending', source_lang=source_lang, ui_lang=ui_lang) }}"
+                      method="post"
+                      class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit"
+                            class="btn button-in-table-black btn-sm"
+                            style="width: auto; min-width: 160px;"
+                            onclick="return confirm('Вы уверены, что хотите отменить этот заказ?')">
+                        Удалить заказ
+                    </button>
+                </form>
+
+            </div>
+
+        </div>
+
+    </div>
+</div>
+                {% endif %}
+                <!-- End: Warning: Unpaid pending orders -->
+
+                {% block container %}
+
+                {% endblock %}
+                <br>
+                {% set is_auth = request.state.is_authenticated and request.state.user %}
+                {% set feedback_next = request.url.path ~ (('?' ~ request.url.query) if request.url.query else '') %}
+
+                <!--Footer Feedback Area Start-->
+                <div class="row">
+                    <div class="col-12 col-md-4 offset-md-4 text-center mb-4">
+                        {% if is_auth %}
+                        <button type="button"
+                                class="btn button-in-table-green"
+                                data-toggle="modal"
+                                data-target="#feedbackModal"
+                                style="width: 100%;">
+                            <i class="fa-solid fa-comment"></i> Появились вопросы? <br>Форма обратной связи к Вашим услугам!
+                        </button>
+                        {% else %}
+                        <a class="btn button-in-table-green"
+                           href="/{{ source_lang }}/{{ ui_lang }}/auth/login/?next={{ feedback_next | urlencode }}&amp;msg=feedback_auth"
+                           onclick="document.cookie='flash=feedback_need_login; Path=/; Max-Age=60; SameSite=Lax'"
+                           style="width: 100%">
+                            <i class="fa-solid fa-comment"></i> Появились вопросы? <br>Форма обратной связи к Вашим услугам!
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <!--End of Footer Feedback Area-->
+
+                <!--Footer Widget Area Start-->
+                <div class="footer-widget-area">
+                    <div class="container">
+                        <br>
+                        <div class="row">
+                            <div class="col-lg-3 col-md-6">
+                                <div class="single-footer-widget">
+                                    <div class="footer-logo">
+                                        <a href="/"><img src="{{ url_for('static', path='img/logo/footer.png') }}" alt="logo"></a>
+                                    </div>
+                                    <p>There are many variations of passg of Lorem Ipsum available, but thmajority have suffered altem, </p>
+                                    <div class="social-icons">
+                                        <a href="#"><i class="zmdi zmdi-facebook"></i></a>
+                                        <a href="#"><i class="zmdi zmdi-rss"></i></a>
+                                        <a href="#"><i class="zmdi zmdi-google-plus"></i></a>
+                                        <a href="#"><i class="zmdi zmdi-pinterest"></i></a>
+                                        <a href="#"><i class="zmdi zmdi-instagram"></i></a>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-md-6">
+                                <div class="single-footer-widget">
+                                    <h3>GET IN TOUCH</h3>
+                                    <a href="tel:0123-456-789"><i class="zmdi zmdi-phone"></i>0123-456-789</a>
+                                    <span><i class="zmdi zmdi-email"></i>info@example.com</span>
+                                    <span><i class="zmdi zmdi-globe"></i>www.example.com</span>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-md-6">
+                                <div class="single-footer-widget">
+                                    <h3>Useful Links</h3>
+                                    <ul class="footer-list">
+                                        <li><a href="#">Teachers &amp; Staff</a></li>
+                                        <li><a href="#">Our Courses</a></li>
+                                        <li><a href="#">Courses Categories</a></li>
+                                        <li><a href="#">Support</a></li>
+                                        <li><a href="#">Terms &amp; Conditions</a></li>
+                                        <li><a href="#">Privacy Policy</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-lg-3 col-md-6">
+                                <div class="single-footer-widget">
+                                    <h3>Instagram</h3>
+                                    <div class="instagram-image">
+                                        <div class="footer-img">
+                                            <a href="#"><img src="{{ url_for('static', path='img/footer/1.jpg') }}" alt=""></a>
+                                        </div>
+                                        <div class="footer-img">
+                                            <a href="#"><img src="{{ url_for('static', path='img/footer/2.jpg') }}" alt=""></a>
+                                        </div>
+                                        <div class="footer-img">
+                                            <a href="#"><img src="{{ url_for('static', path='img/footer/3.jpg') }}" alt=""></a>
+                                        </div>
+                                        <div class="footer-img">
+                                            <a href="#"><img src="{{ url_for('static', path='img/footer/4.jpg') }}" alt=""></a>
+                                        </div>
+                                        <div class="footer-img">
+                                            <a href="#"><img src="{{ url_for('static', path='img/footer/5.jpg') }}" alt=""></a>
+                                        </div>
+                                        <div class="footer-img">
+                                            <a href="#"><img src="{{ url_for('static', path='img/footer/6.jpg') }}" alt=""></a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!--End of Footer Widget Area-->
+                <br>
+                <!--Footer Area Start-->
+                <footer class="footer-area">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-lg-4 col-md-4 col-12">
+                                <span>StrandjaSchool &copy; 2016-{{ current_year() }}</span>
+                            </div>
+                            <div class="col-lg-4 col-md-4 col-12">
+                                <div class="column-center">
+                                    <span>Privacy Policy , Terms &amp; Conditions</span>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-4 col-12">
+                                <div class="column-center">
+                                    <a rel="nofollow" href="https://www.freepik.com" target="_blank">
+                                        <span style="color: white;">Photos by freepik.com are used</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+                <!--End of Footer Area-->
+            </div>
+            <!--End of Bg White-->
+        </div>
+        <!--End of Main Wrapper Area-->
+
+        <!-- jquery -->
+        <script src="{{ url_for('static', path='js/vendor/jquery-1.12.4.min.js') }}"></script>
+
+		<!-- popper JS -->
+        <script src="{{ url_for('static', path='js/popper.min.js') }}"></script>
+
+		<!-- bootstrap JS -->
+        <script src="{{ url_for('static', path='js/bootstrap.min.js') }}"></script>
+
+		<!-- AJax Mail JS -->
+        <script src="{{ url_for('static', path='js/ajax-mail.js') }}"></script>
+
+		<!-- plugins JS -->
+        <script src="{{ url_for('static', path='js/plugins.js') }}"></script>
+
+		<!-- StyleSwitch JS -->
+<!--        <script src="{{ url_for('static', path='js/styleswitch.js') }}"></script>-->
+
+		<!-- main JS -->
+        <script src="{{ url_for('static', path='js/main.js') }}"></script>
+
+        {% block js_scripts %} {% endblock %}
+
+        {% if is_auth %}
+        <div class="modal fade" id="feedbackModal" tabindex="-1" role="dialog" aria-labelledby="feedbackModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="feedbackModalLabel">Форма обратной связи</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Закрыть">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <form id="feedbackForm"
+                          method="post"
+                          action="/{{ source_lang }}/{{ ui_lang }}/feedback/"
+                          novalidate>
+                        <div class="modal-body">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="page_url" id="feedbackPageUrl" value="">
+                            <input type="hidden" name="exercise_name" id="feedbackExerciseName" value="">
+
+                            <p class="text-muted">Ваше сообщение будет связано с текущей страницей</p>
+
+                            <div class="form-group">
+                                <label for="feedbackTopic">Выберите тему:</label>
+                                <select class="form-control" id="feedbackTopic" name="topic" required>
+                                    <option value="" selected disabled>Выберите тему</option>
+                                    <option value="Вопрос по программе обучения">Вопрос по программе обучения</option>
+                                    <option value="Вопрос к службе технической поддержки">Вопрос к службе технической поддержки</option>
+                                    <option value="Ошибка в тексте (звуковом файле, видео)">Ошибка в тексте (звуковом файле, видео)</option>
+                                    <option value="Прочие вопросы">Прочие вопросы</option>
+                                </select>
+                                <div class="invalid-feedback">Пожалуйста, выберите тему</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="feedbackMessage">Введите информацию в это поле:</label>
+                                <textarea class="form-control" id="feedbackMessage" name="message" rows="5" required></textarea>
+                                <div class="invalid-feedback">Пожалуйста, введите текст сообщения</div>
+                            </div>
+
+                            <div class="form-group mb-0">
+                                <div>Хотите получить ответ?</div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" value="1" id="feedbackWantReply" name="want_reply">
+                                    <label class="form-check-label" for="feedbackWantReply">Да, хочу получить ответ</label>
+                                </div>
+                            </div>
+
+                            <div id="feedbackFormAlert" class="alert mt-3 mb-0" style="display:none;"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="submit" class="btn button-in-table-green" id="feedbackSubmitBtn">Отправить</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <script>
+            (function () {
+                function textOf(el) {
+                    return el && el.textContent ? el.textContent.replace(/\s+/g, " ").trim() : "";
+                }
+
+                function detectExerciseName() {
+                    var tiHeader = document.querySelector(".exercise-header[data-mode='text_intensive']");
+                    var vqtHeader = document.querySelector(".exercise-header[data-mode='vqt']");
+                    var coachOnline = document.getElementById("coachOnlineStatus") || document.getElementById("coachOnlineMount");
+
+                    if (tiHeader) {
+                        if (window.TextLab && TextLab.currentId) {
+                            return String(TextLab.currentId);
+                        }
+                        var activeToc = document.querySelector(".ti-toc-item.active[data-exercise-id]");
+                        if (activeToc && activeToc.getAttribute("data-exercise-id")) {
+                            return activeToc.getAttribute("data-exercise-id");
+                        }
+                        return tiHeader.getAttribute("data-theme") || "";
+                    }
+
+                    if (vqtHeader) {
+                        var subtitleText = textOf(document.getElementById("exerciseSubtitle"));
+                        if (subtitleText) {
+                            var themeCode = subtitleText.match(/^Код темы::\s*(.+)$/i);
+                            return themeCode ? themeCode[1].trim() : subtitleText;
+                        }
+                        return vqtHeader.getAttribute("data-theme") || "";
+                    }
+
+                    if (coachOnline) {
+                        var currentTheme = document.querySelector(".theme-node.current[data-theme]");
+                        if (currentTheme && currentTheme.getAttribute("data-theme")) {
+                            return currentTheme.getAttribute("data-theme");
+                        }
+                        var coachHeader = document.querySelector("#stickySlot .exercise-header h3");
+                        return textOf(coachHeader);
+                    }
+
+                    return "";
+                }
+
+                function setFlashCookie(value) {
+                    document.cookie = "flash=" + value + "; Path=/; Max-Age=60; SameSite=Lax";
+                }
+
+                function showFormAlert(type, text) {
+                    var box = document.getElementById("feedbackFormAlert");
+                    box.className = "alert mt-3 mb-0 alert-" + type;
+                    box.textContent = text;
+                    box.style.display = "block";
+                }
+
+                function clearValidation(form) {
+                    form.querySelectorAll(".is-invalid").forEach(function (el) {
+                        el.classList.remove("is-invalid");
+                    });
+                }
+
+                function validateForm(form) {
+                    var valid = true;
+                    var topic = form.querySelector("[name='topic']");
+                    var message = form.querySelector("[name='message']");
+                    clearValidation(form);
+                    if (!topic.value) {
+                        topic.classList.add("is-invalid");
+                        valid = false;
+                    }
+                    if (!message.value.trim()) {
+                        message.classList.add("is-invalid");
+                        valid = false;
+                    }
+                    return valid;
+                }
+
+                document.addEventListener("DOMContentLoaded", function () {
+                    var form = document.getElementById("feedbackForm");
+                    if (!form) {
+                        return;
+                    }
+
+                    $("#feedbackModal").on("show.bs.modal", function () {
+                        document.getElementById("feedbackPageUrl").value = window.location.pathname + window.location.search;
+                        document.getElementById("feedbackExerciseName").value = detectExerciseName();
+                        document.getElementById("feedbackFormAlert").style.display = "none";
+                        clearValidation(form);
+                    });
+
+                    form.addEventListener("submit", function (event) {
+                        event.preventDefault();
+                        if (!validateForm(form)) {
+                            return;
+                        }
+
+                        var submitBtn = document.getElementById("feedbackSubmitBtn");
+                        submitBtn.disabled = true;
+                        document.getElementById("feedbackExerciseName").value = detectExerciseName();
+
+                        fetch(form.action, {
+                            method: "POST",
+                            body: new FormData(form),
+                            headers: {
+                                "X-Requested-With": "XMLHttpRequest"
+                            },
+                            credentials: "same-origin"
+                        }).then(function (response) {
+                            if (response.status === 401) {
+                                setFlashCookie("feedback_need_login");
+                                window.location.href = "/{{ source_lang }}/{{ ui_lang }}/auth/login/?next=" + encodeURIComponent(window.location.pathname + window.location.search) + "&msg=feedback_auth";
+                                return;
+                            }
+                            return response.json().then(function (data) {
+                                if (!response.ok || !data.ok) {
+                                    showFormAlert("danger", data.detail || "Не удалось отправить сообщение.");
+                                    submitBtn.disabled = false;
+                                    return;
+                                }
+                                form.reset();
+                                showFormAlert("success", "Спасибо! Ваше сообщение отправлено.");
+                                setTimeout(function () {
+                                    $("#feedbackModal").modal("hide");
+                                    submitBtn.disabled = false;
+                                    document.getElementById("feedbackFormAlert").style.display = "none";
+                                }, 3000);
+                            });
+                        }).catch(function () {
+                            showFormAlert("danger", "Не удалось отправить сообщение. Попробуйте ещё раз.");
+                            submitBtn.disabled = false;
+                        });
+                    });
+                });
+            })();
+        </script>
+
+    </body>
+</html>
