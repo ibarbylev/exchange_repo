@@ -1,4 +1,5 @@
 import asyncpg
+import json
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -66,6 +67,21 @@ async def check_password_for_email(pool, email: str, password: str) -> bool:
         return False
 
 
+
+def _as_daily_activity(raw) -> dict:
+    """Ячейка стрика как словарь. Чтение не выдаёт номер Q и ничего не пишет."""
+    if raw is None or raw == "":
+        return {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+    if not isinstance(raw, dict):
+        return {}
+    return raw
+
+
 async def get_current_user(token: str, pool):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -99,13 +115,15 @@ async def get_current_user(token: str, pool):
 
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                """SELECT access_level, current_exercise, access_until, role FROM users WHERE id = $1""",
+                """SELECT access_level, current_exercise, access_until, role, daily_activity
+                   FROM users WHERE id = $1""",
                 user_id
             )
             access_level = row["access_level"] if row else 0
             current_exercise = row["current_exercise"] if row else 0
             access_until = row["access_until"].strftime("%Y-%m-%d %H:%M") if row.get("access_until") else None
             role = row["role"] if row and row.get("role") else "student"
+            daily_activity = _as_daily_activity(row["daily_activity"] if row else None)
 
         return {
             "user_id": user_id,
@@ -113,6 +131,7 @@ async def get_current_user(token: str, pool):
             "access_level": access_level,
             "access_until": access_until,
             "current_exercise": current_exercise,
+            "daily_activity": daily_activity,
             "role": role,
             "jti": jti
         }
