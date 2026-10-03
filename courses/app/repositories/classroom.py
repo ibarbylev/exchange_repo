@@ -100,9 +100,50 @@ def lang_prefix_from_name(name: str | None) -> str | None:
 
 def _series_cursor_value(raw: Any) -> str | None:
     if isinstance(raw, dict):
-        raw = raw.get("exercise") or raw.get("block") or raw.get("name")
+        raw = raw.get("name") or raw.get("exercise") or raw.get("block")
     text = str(raw or "").strip()
     return text or None
+
+
+def _cursor_at(raw: Any) -> str | None:
+    """Время сдвига. Нет ключа at — курсор ещё без даты."""
+    if not isinstance(raw, dict):
+        return None
+    text = str(raw.get("at") or "").strip()
+    return text or None
+
+
+def server_now_iso() -> str:
+    from datetime import datetime
+    return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def progress_entry_kind(
+        current_exercise: Any,
+        intensive_progress: Any,
+        lang_prefix: str | None,
+) -> str | None:
+    """Какой курсор открывать. Нет at — самый свежий, дальше не смотрим.
+
+    Порядок: VQT, затем Text X. Оба с at — большее время, равенство за VQT.
+    Нет ключа пары — это не кандидат.
+    """
+    prefix = (lang_prefix or "").strip().upper()
+    vqt = parse_current_exercise_entries(current_exercise).get(prefix)
+    intensive = _intensive_raw_cursor(intensive_progress, prefix)
+    vqt_name = _series_cursor_value(vqt)
+    x_name = _series_cursor_value(intensive)
+    if vqt_name and _cursor_at(vqt) is None:
+        return "vqt"
+    if x_name and _cursor_at(intensive) is None:
+        return "intensive"
+    if vqt_name and x_name:
+        return "vqt" if _cursor_at(vqt) >= _cursor_at(intensive) else "intensive"
+    if vqt_name:
+        return "vqt"
+    if x_name:
+        return "intensive"
+    return None
 
 
 def _legacy_flat_cursors(data: dict) -> dict[str, str]:
@@ -128,6 +169,30 @@ def _pair_without_c(value: Any) -> dict[str, Any]:
     return cleaned
 
 
+def _intensive_raw_cursor(progress: Any, lang_prefix: str | None) -> Any:
+    """Сырое значение X этой пары: строка или {"name", "at"}. Нет курсора — None."""
+    data = _parse_json_map(progress)
+    prefix = (lang_prefix or "").strip().upper() or None
+    pair = None
+    if prefix:
+        raw_pair = data.get(prefix)
+        if raw_pair is None:
+            raw_pair = data.get(prefix.lower())
+        if isinstance(raw_pair, dict):
+            pair = raw_pair
+    source = pair if pair is not None else data
+    raw = source.get("X")
+    if raw is None:
+        raw = source.get("x")
+    if not _series_cursor_value(raw):
+        return None
+    text = _series_cursor_value(raw)
+    if text and prefix and not text.upper().startswith(prefix):
+        if pair is None and lang_prefix_from_name(text):
+            return None
+    return raw
+
+
 def _intensive_cursors(
         progress: dict | None,
         lang_prefix: str | None = None,
@@ -135,7 +200,7 @@ def _intensive_cursors(
     """
     intensive_progress по языковой паре — только курсор Text Intensive (X):
 
-        {"BGRU": {"X": "BGRUA1_text2_…"}}
+        {"BGRU": {"X": {"name": "BGRUA1_text2_…", "at": "<server time>"}}}
 
     Прогресс C живёт в coach_lessons, ключ C в JSON не читаем.
     Пара появляется только после первого сохранения прогресса по ней.
@@ -174,9 +239,11 @@ def migrate_intensive_progress(
         lang_prefix: str,
         series: str,
         cursor: str,
+        at: str | None = None,
 ) -> dict:
     """
     Пишет курсор Text Intensive (X) в прогресс пары. Другие пары не создаёт.
+    at передаётся только вместе со сдвигом вперёд. Без at ключ времени не ставится.
     Плоский legacy {"X": "..."} при первой записи раскладывает по префиксу
     имени курсора, чтобы не потерять уже сохранённый прогресс X.
     """
@@ -202,18 +269,16 @@ def migrate_intensive_progress(
     if series != "X" or not prefix:
         return stored
     pair = stored.setdefault(prefix, _pair_without_c(stored.get(prefix)))
-    pair["X"] = cursor
+    if at:
+        pair["X"] = {"name": cursor, "at": at}
+    elif not _series_cursor_value(pair.get("X")):
+        pair["X"] = cursor
     stored[prefix] = _pair_without_c(pair)
     return stored
 
 
-def parse_current_exercise_map(value: Any) -> dict[str, str]:
-    """
-    current_exercise:
-      - устаревшая строка "BGRUA1002_Q001"
-      - карта {"BGRU": "BGRUA1002_Q001"}
-    Пара появляется только после первого сохранения по ней.
-    """
+def parse_current_exercise_entries(value: Any) -> dict[str, Any]:
+    """Сырой курсор пары: строка или {"name", "at"}. Чужие пары не теряются."""
     if value is None or value == "":
         return {}
     if isinstance(value, dict):
@@ -230,13 +295,27 @@ def parse_current_exercise_map(value: Any) -> dict[str, str]:
     else:
         data = _parse_json_map(value)
 
-    result: dict[str, str] = {}
+    result: dict[str, Any] = {}
     for key, raw in data.items():
         prefix = str(key or "").strip().upper()
-        name = str(raw or "").strip()
-        if len(prefix) == 4 and prefix.isalpha() and name:
-            result[prefix] = name
+        if len(prefix) == 4 and prefix.isalpha() and _series_cursor_value(raw):
+            result[prefix] = raw
     return result
+
+
+def parse_current_exercise_map(value: Any) -> dict[str, str]:
+    """
+    current_exercise, только имена:
+      - устаревшая строка "BGRUA1002_Q001"
+      - карта {"BGRU": "BGRUA1002_Q001"}
+      - карта {"BGRU": {"name": "BGRUA1002_Q001", "at": "<server time>"}}
+    Пара появляется только после первого сохранения по ней.
+    """
+    return {
+        prefix: name
+        for prefix, raw in parse_current_exercise_entries(value).items()
+        if (name := _series_cursor_value(raw))
+    }
 
 
 def current_exercise_for_prefix(value: Any, lang_prefix: str | None) -> str | None:
@@ -346,6 +425,24 @@ def _cursor_series_index(blocks: list[dict], cursor: str | None) -> int:
     return 0
 
 
+def intensive_entry_visible(blocks: list | None, progress: Any, lang_prefix: str | None) -> bool:
+    """Курсор X можно открыть: блок есть и не закрыт тарифом."""
+    cursor = _intensive_cursors(progress, lang_prefix).get("X")
+    if not cursor:
+        return False
+    prepared = []
+    for raw in blocks or []:
+        block = dict(raw)
+        if (block.get("block_type") or "X").upper() != "X":
+            continue
+        block["exercise_ids"] = _block_exercise_ids(block.get("file_name"), "X")
+        prepared.append(block)
+    if not prepared:
+        return False
+    block = prepared[_cursor_series_index(prepared, cursor)]
+    return bool(block.get("is_clickable", True))
+
+
 def _series_tree_status(block: dict, series_index: int, cursor_index: int) -> tuple[str, str]:
     tariff_ok = bool(block.get("is_clickable", True))
     if series_index < cursor_index:
@@ -429,6 +526,7 @@ def _insert_intensive_blocks(
         stars_map: dict | None = None,
         lang_prefix: str | None = None,
         coach_completed_names: set[str] | None = None,
+        x_is_entry: bool = True,
 ) -> list[dict]:
     """Вставляет блоки intensive после after_lesson.
 
@@ -473,9 +571,16 @@ def _insert_intensive_blocks(
             else:
                 status, lock_reason = _series_tree_status(block, series_index, x_cursor_index)
             stars = aggregate_stars(block.get("exercise_ids"), stars_map)
-            inserted.append(_intensive_lesson_node(
+            node = _intensive_lesson_node(
                 block, status, stars, series_index=series_index, lock_reason=lock_reason
-            ))
+            )
+            if (
+                x_is_entry
+                and block_type == "X"
+                and status == TREE_STATUS_CURRENT
+            ):
+                node["extra_classes"] = (node.get("extra_classes") or "") + " entry"
+            inserted.append(node)
     return inserted
 
 
@@ -573,6 +678,8 @@ async def build_classroom_tree(
         theme_test_names: dict[str, list[str]] | None = None,
         lang_prefix: str | None = None,
         coach_completed_names: set[str] | None = None,
+        x_is_entry: bool = True,
+        entry_kind: str | None = None,
 ) -> dict:
     """
     Вспомогательная функция для функции get_classroom_tree:
@@ -723,6 +830,8 @@ async def build_classroom_tree(
                     theme_extra_classes.append(f"locked-{theme_lock_reason}")
                 if is_current:
                     theme_extra_classes.append("current")
+                    if entry_kind == "vqt":
+                        theme_extra_classes.append("entry")
 
                 if is_completed:
                     theme_icon = "zmdi zmdi-folder-outline text-success"
@@ -769,8 +878,11 @@ async def build_classroom_tree(
             stars_map,
             lang_prefix,
             coach_completed_names,
+            x_is_entry,
         )
 
+        if any(item.get("is_current") for item in course_dict["lessons"]):
+            course_dict["open_class"] = "open"
         result.append(course_dict)
 
     return {"courses": result}
@@ -784,10 +896,12 @@ async def get_classroom_tree(
         user_id: int | None = None,
         intensive_progress: dict | None = None,
         exercise_stars: dict | None = None,
+        current_exercise: Any = None,
 ) -> dict:
     """
     Получает из БД списки курсов, уроков, тем и формирует из них дерево,
     с помощью функции  build_classroom_tree.
+    current_exercise нужен только чтобы выбрать одну точку входа.
     """
     async with pool.acquire() as conn:
 
@@ -897,6 +1011,11 @@ async def get_classroom_tree(
             )
             coach_completed_names = {row["lesson_name"] for row in coach_rows}
 
+        entry = progress_entry_kind(current_exercise, intensive_progress, lang_prefix)
+        if entry == "intensive" and not intensive_entry_visible(
+            intensive_blocks, intensive_progress, lang_prefix
+        ):
+            entry = "vqt" if current_theme_name else None
         tree = await build_classroom_tree(
             courses=courses,
             lessons=lessons,
@@ -911,6 +1030,8 @@ async def get_classroom_tree(
             theme_test_names=theme_test_names,
             lang_prefix=lang_prefix,
             coach_completed_names=coach_completed_names,
+            x_is_entry=entry == "intensive",
+            entry_kind=entry,
         )
 
     return tree

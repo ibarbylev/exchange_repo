@@ -21,7 +21,10 @@ from app.repositories.classroom import (
     lang_prefix_from_name,
     migrate_intensive_progress,
     parse_current_exercise_map,
+    parse_current_exercise_entries,
     current_exercise_for_prefix,
+    server_now_iso,
+    _series_cursor_value,
 )
 from app.repositories.intensive import get_block
 from app.routers.deps import LangPair, LangDep, render_template, render_template_string
@@ -169,6 +172,7 @@ async def classroom_player(
         ),
         user_id=(current_user.get("user_id") or current_user.get("id")) if current_user else None,
         intensive_progress=current_user.get("intensive_progress") if current_user else None,
+        current_exercise=current_user.get("current_exercise") if current_user else None,
     )
     theme_data = find_theme_in_tree(tree_data, theme)
     if not theme_data:
@@ -375,6 +379,7 @@ async def get_classroom(
         target_exercise=target_exercise,
         user_id = (current_user.get("user_id") or current_user.get("id")) if current_user else None,
         intensive_progress = current_user.get("intensive_progress") if current_user else None,
+        current_exercise = current_user.get("current_exercise") if current_user else None,
     )
 
     access_names = {
@@ -435,6 +440,7 @@ async def classroom_tree_api(
         user_id=user_id,
         intensive_progress=None,
         exercise_stars=None,
+        current_exercise=raw_current,
     )
     html = render_template_string(
         request=request,
@@ -657,8 +663,8 @@ async def save_current_exercise(
                 "SELECT current_exercise FROM users WHERE id = $1",
                 user_id,
             )
-            mapping = parse_current_exercise_map(raw)
-            old_name = mapping.get(prefix)
+            entries = parse_current_exercise_entries(raw)
+            old_name = _series_cursor_value(entries.get(prefix))
             new_pos = await conn.fetchval(
                 "SELECT pos FROM exercises WHERE name = $1",
                 exercise_name,
@@ -673,16 +679,16 @@ async def save_current_exercise(
                 if old_pos is not None and new_pos <= old_pos:
                     return {
                         "success": True,
-                        "current_exercise": mapping,
+                        "current_exercise": parse_current_exercise_map(entries),
                     }
-            mapping[prefix] = exercise_name
-            payload = json.dumps(mapping, ensure_ascii=False)
+            entries[prefix] = {"name": exercise_name, "at": server_now_iso()}
+            payload = json.dumps(entries, ensure_ascii=False)
             await conn.execute(
                 "UPDATE users SET current_exercise = $1::jsonb WHERE id = $2",
                 payload,
                 user_id,
             )
-        return {"success": True, "current_exercise": mapping}
+        return {"success": True, "current_exercise": parse_current_exercise_map(entries)}
     except Exception as e:
         print(f"[BACKEND] ОШИБКА при UPDATE: {e}")
         return {"success": False, "error": str(e)}
@@ -784,9 +790,14 @@ async def save_intensive_progress(
                 return {"success": False, "error": "unknown exercise"}
 
             legacy_flat = "X" in _parse_json_map(progress)
-            if new_rank > old_rank or legacy_flat:
+            advanced = new_rank > old_rank
+            if advanced or legacy_flat:
                 progress = migrate_intensive_progress(
-                    progress, prefix, series, exercise_name
+                    progress,
+                    prefix,
+                    series,
+                    exercise_name,
+                    at=server_now_iso() if advanced else None,
                 )
                 await conn.execute(
                     "UPDATE users SET intensive_progress = $1::jsonb WHERE id = $2",

@@ -744,7 +744,8 @@
     document.addEventListener('DOMContentLoaded', function () {
         Classroom.layout.init();
         Classroom.tree.init();
-        const current = document.querySelector('.theme-node.current');
+        const current = document.querySelector('.theme-node.entry')
+            || document.querySelector('.theme-node.current');
         if (current) {
             setTimeout(() => Classroom.tree.handleThemeClick(current), 400);
         }
