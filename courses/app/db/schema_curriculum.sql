@@ -103,10 +103,10 @@ WHERE NOT EXISTS (SELECT 1 FROM courses);
 --  в JSON, который загружается в память при старте.
 --
 --  Прогресс (таблица users, другая схема):
---    current_exercise    VARCHAR  -- курсор интерактива
---    intensive_progress  JSONB    -- курсор Text Intensive {"BGRU": {"X": "<exercise>"}}
+--    current_exercise    JSONB    -- V/Q/T {"BGRU": {"name": "<exercise>", "at": "<server time>"}}
+--    intensive_progress  JSONB    -- Text X {"BGRU": {"X": {"name": "<exercise>", "at": "<server time>"}}}
 --    exercise_stars      JSONB    -- качество {"<exercise>": 1|2|3}
---  Прогресс C — таблица coach_lessons, не intensive_progress.
+--  at пишется только при сдвиге курсора вперёд. Прогресс C — coach_lessons.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS intensive_blocks (
     name            VARCHAR(255) PRIMARY KEY,
