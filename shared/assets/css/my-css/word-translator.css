@@ -1,0 +1,60 @@
+/* Всплывающий перевод болгарского слова. */
+
+.word-translator-popup {
+    position: fixed;
+    z-index: 5000;
+    display: none;
+    min-width: 12rem;
+    max-width: min(22rem, calc(100vw - 16px));
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid #c5e1a5;
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+    color: #2d3e50;
+}
+
+.word-translator-popup.is-visible {
+    display: block;
+}
+
+.word-translator-popup .wt-word {
+    font-weight: 700;
+    color: #1f3d2b;
+    margin-bottom: 4px;
+}
+
+.word-translator-popup .wt-translation {
+    font-size: 0.98rem;
+    line-height: 1.35;
+}
+
+.word-translator-popup .wt-translation.is-muted {
+    color: #78909c;
+    font-style: italic;
+}
+
+.word-translator-popup .wt-audio {
+    display: none;
+    margin-top: 8px;
+    border: 0;
+    background: #86bc42;
+    color: #fff;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.word-translator-popup .wt-audio.is-visible {
+    display: inline-flex;
+}
+
+.js-bg-word {
+    cursor: pointer;
+}
+
+.js-bg-word:hover,
+.js-bg-word.is-active {
+    background: #eaf6d6;
+}

@@ -1,0 +1,537 @@
+/* ==== Альтернатива Fontawesome =================================== */
+.check::before {
+    content: "✔";
+    font-size: 24px;
+    color: #86bc42;
+}
+
+.zmdi-refresh {
+    font-size: 20px;
+
+}
+
+.icon-volume {
+    font-size: 26px;
+}
+
+.icon-volume:hover {
+    color: #86bc42;
+    font-size: 26px;
+}
+
+.icon-volume-small {
+    font-size: 20px;
+}
+
+.icon-volume-small:hover {
+    color: #86bc42;
+    font-size: 20px;
+}
+/* ================================================================= */
+.divider-line {
+    flex: 1;
+    height: 1px;
+    background: #ccc;
+}
+
+.divider-line-bold {
+    flex: 1;
+    height: 4px;
+    background: #ccc;
+}
+
+/* ============== Таблица сравнения table-compare.html ================ */
+.study-pricing-table .button-row td {
+    padding: 6px 10px;
+}
+
+.add-to-cart-btn {
+    width: calc(100% - 10px);
+    margin: 0 5px;
+}
+
+.button-in-table-green {
+    background: #86bc42 none repeat scroll 0 0;
+    color: #ffffff;
+    display: inline-block;
+    font-family: "montserratregular";
+    font-size: 14px;
+    margin: 0;
+    padding: 15px 25px;
+    text-transform: uppercase;
+    width: 100%;
+}
+
+.button-in-table-green:hover {
+    background: #2d3e50 !important;
+    color: #ffffff !important;
+    cursor: pointer;
+}
+
+.button-in-table-black {
+    background: #2d3e50 none repeat scroll 0 0;
+    color: #ffffff;
+    display: inline-block;
+    font-family: "montserratregular";
+    font-size: 14px;
+    margin: 0;
+    padding: 15px 25px;
+    text-transform: uppercase;
+    width: 100%;
+}
+
+.button-in-table-black:hover {
+    background: #86bc42;
+    cursor: pointer;
+    color: #ffffff;
+}
+
+
+
+
+
+
+
+
+
+
+
+.pricing-table-wrapper {
+    overflow-x: auto;
+}
+
+.study-pricing-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+}
+
+.study-pricing-table th,
+.study-pricing-table td {
+    padding: 20px 20px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.study-pricing-table thead th {
+    background: #2d3e50;
+    color: #ffffff;
+    text-transform: uppercase;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+
+.study-pricing-table tbody tr:nth-child(even) {
+    background: #f9f9f9;
+}
+
+.study-pricing-table .option-col {
+    width: 55%;
+    text-align: left;
+}
+
+.study-pricing-table .plan-col {
+    width: 15%;
+    text-align: center;
+}
+
+.study-pricing-table .coach-col {
+    width: 22%;
+    text-align: center;
+}
+
+.study-pricing-table .option-name {
+    color: #2d3e50;
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.study-pricing-table .plan-value {
+    text-align: center;
+    font-size: 18px;
+    color: #86bc42;
+    font-weight: 600;
+}
+
+.study-pricing-table .plan-value.disabled {
+    color: #c7c7c7;
+}
+
+.study-pricing-table .active-plan {
+    background: #86bc42;
+}
+
+.study-pricing-table .active-plan .plan-title {
+    color: #ffffff;
+}
+
+.study-pricing-table tbody tr:hover {
+    background: #f8f8f8;
+    transition: 0.3s;
+}
+
+.study-pricing-table .price-row td {
+    font-size: 20px;
+    font-weight: 700;
+    color: #2d3e50;
+}
+.option-name ul {
+    list-style-type: disc;
+    padding-left: 20px;
+}
+@media (max-width: 767px) {
+    .study-pricing-table th,
+    .study-pricing-table td {
+        padding: 14px 10px;
+        font-size: 14px;
+    }
+
+    .study-pricing-table .option-name {
+        font-size: 14px;
+    }
+}
+/*-------- Переключатель Помесячно / За год --------*/
+/* Современный Toggle Switch */
+.pricing-toggle-container {
+    margin: 50px 0 60px 0;
+}
+
+.pricing-toggle {
+    display: inline-flex;
+    align-items: center;
+    background: #f8f9fa;
+    border-radius: 50px;
+    padding: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e9ecef;
+}
+
+.toggle-option {
+    padding: 12px 32px;
+    font-weight: 600;
+    color: #555;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 50px;
+    background: transparent;
+}
+
+.toggle-option.monthly.active {
+    background: #2d3e50;
+    color: white;
+}
+.toggle-option.yearly.active {
+    background: #86bc42;
+    color: white;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 78px;
+    height: 42px;
+    margin: 0 20px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #2d3e50;
+    transition: .4s;
+    border-radius: 50px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 34px;
+    width: 34px;
+    left: 4px;
+    bottom: 4px;
+    background: white;
+    transition: .4s;
+    border-radius: 50%;
+}
+
+input:checked + .slider {
+    background: #86bc42;
+}
+
+input:checked + .slider:before {
+    transform: translateX(36px);
+}
+
+small {
+    font-size: 12px;
+}
+
+/* === Модальное окно таблицы курсов ======================================================================= */
+.course-levels {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.course-select-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border: 1px solid #ececec;
+    border-radius: 16px;
+    transition: .2s ease;
+    background: #fff;
+}
+
+.course-select-row:hover {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+}
+
+.course-select-name {
+    flex: 1;
+    font-size: 18px;
+    font-family: 'montserratsemi';
+    padding-right: 20px;
+}
+
+.course-select-price {
+    width: 120px;
+    text-align: center;
+    font-size: 26px;
+    font-family: 'montserratsemi';
+    /*color: #28a745;*/
+}
+
+.course-select-action {
+    width: 170px;
+    text-align: right;
+}
+
+.modal-header {
+    background: #86bc42;
+    color: #fff;
+    border-bottom: none;
+    padding: 20px 25px;
+}
+
+.modal-header .close {
+    color: #fff;
+    opacity: 1;
+    text-shadow: none;
+}
+
+/* ========= cart page ======================================================= */
+
+.cart-table-wrapper {
+    overflow-x: auto;
+    margin-top: 25px;
+}
+
+/* ================= TABLE BASE ================= */
+.cart-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    table-layout: auto;
+    border: 1px solid #e7e7e7;
+}
+
+/* убираем конфликты наследования */
+.cart-table th,
+.cart-table td {
+    padding: 16px 18px;
+    vertical-align: middle;
+    border-bottom: 1px solid #ececec;
+    color: #2d3e50;
+}
+
+/* ================= HEADER ================= */
+.cart-table thead th {
+    background: #2d3e50 ;
+    color: #ffffff !important;
+
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+
+    border-bottom: none;
+    white-space: nowrap;
+    text-align: center;
+
+    /* чтобы не было разного поведения */
+}
+
+.cart-table thead th.active-plan {
+    background: #86bc42 !important;
+    color: #ffffff;
+}
+/* первый столбец заголовка */
+.cart-table thead th.option-col {
+    text-align: left;
+}
+
+/* разделители в шапке */
+.cart-table thead th {
+    border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.cart-table thead th:last-child {
+    border-right: none;
+}
+
+/* ================= COLUMNS WIDTH ================= */
+.cart-table .col-product { width: 24%; text-align: left; }
+.cart-table .col-description { width: 36%; text-align: left; }
+.cart-table .col-qty { width: 10%; text-align: center; }
+.cart-table .col-price { width: 10%; text-align: center; }
+.cart-table .col-discount { width: 10%; text-align: center; }
+.cart-table .col-total { width: 10%; text-align: center; }
+.cart-table .col-actions { width: 10%; text-align: center; }
+
+/* ================= CONTENT ================= */
+.cart-table .product-name {
+    color: #2d3e50;
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.cart-table .product-description {
+    color: #5f6b7a;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.cart-table .product-description a {
+    color: #4a6fa5;
+    text-decoration: none;
+}
+
+.cart-table .product-description a:hover {
+    text-decoration: underline;
+}
+
+/* центрируем числа */
+.cart-table .text-center {
+    text-align: center;
+    font-size: 15px;
+    color: #3f4a56;
+}
+
+.cart-table .price-final {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+    color: #2d3e50;
+}
+
+/* ================= HOVER ================= */
+.cart-table tbody tr:hover {
+    background: #fafbfc;
+    transition: background 0.2s ease;
+}
+
+/* ================= SUMMARY ================= */
+.cart-table .summary-row td {
+    background: #fafafa;
+    border-bottom: none;
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+.cart-table .summary-title {
+    text-align: right;
+    font-size: 15px;
+    font-weight: 700;
+    color: #2d3e50;
+}
+
+.cart-table .summary-value {
+    text-align: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: #2d3e50;
+}
+
+/* ================= MOBILE ================= */
+@media (max-width: 767px) {
+    .cart-table th,
+    .cart-table td {
+        padding: 12px 10px;
+        font-size: 13px;
+    }
+
+    .cart-table .summary-value {
+        font-size: 16px;
+    }
+}
+
+/* ====================== auth ========================= */
+#authTabs {
+    border-bottom: none;
+}
+
+#authTabs .nav-link {
+    /*background: #f5f5f5;*/
+    text-transform: uppercase;
+    color: #555;
+    border: none;
+    border-radius: 0;
+    padding: 14px 20px;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+#authTabs .nav-link.active {
+    background: #546474;  /* #4d667d;     #007bff; */
+    color: white;
+    text-transform: uppercase;
+}
+
+#authTabs .nav-link:hover {
+    background: #86bc42;
+    color: white;
+}
+
+#authTabs .nav-link.active:hover {
+    background: #546474;  /* Тот же цвет, чтобы нивелировать действие hover */
+    color: white;
+    text-transform: uppercase;
+}
+
+/* =================================================================== */
+
+/* mobile */
+@media (max-width: 767px) {
+
+    .cart-table th,
+    .cart-table td {
+        padding: 12px 10px;
+    }
+
+    .cart-table thead th {
+        font-size: 12px;
+    }
+
+    .cart-table .product-name,
+    .cart-table .product-description,
+    .cart-table .text-center,
+    .cart-table .price-final {
+        font-size: 13px;
+    }
+
+    .cart-table .summary-value {
+        font-size: 16px;
+    }
+}
