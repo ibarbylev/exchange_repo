@@ -67,6 +67,53 @@ async def check_password_for_email(pool, email: str, password: str) -> bool:
         return False
 
 
+def streak_view(daily_activity: dict) -> dict:
+    """Поля индикатора серии. Новый день — с 07:00 времени сервера, как в daily_activity."""
+    raw = daily_activity or {}
+    try:
+        streak = int(raw.get("streak") or 0)
+    except (TypeError, ValueError):
+        streak = 0
+    try:
+        freeze_days = int(raw.get("freeze") or 0)
+    except (TypeError, ValueError):
+        freeze_days = 0
+    last_on = raw.get("last_on") or ""
+    activity_day = (datetime.now() - timedelta(hours=7)).date()
+    last_date = None
+    if last_on:
+        try:
+            last_date = datetime.strptime(str(last_on)[:10], "%Y-%m-%d").date()
+        except ValueError:
+            last_date = None
+    weekdays = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
+    show = min(max(streak, 0), 7)
+    marks = []
+    if last_date and show:
+        start = last_date - timedelta(days=show - 1)
+        for offset in range(show):
+            day = start + timedelta(days=offset)
+            marks.append({
+                "label": weekdays[day.weekday()],
+                "is_today": day == activity_day,
+                "done": True,
+            })
+    active_today = last_date == activity_day if last_date else False
+    if not active_today:
+        if len(marks) >= 7:
+            marks = marks[-6:]
+        marks.append({
+            "label": weekdays[activity_day.weekday()],
+            "is_today": True,
+            "done": False,
+        })
+    return {
+        "streak_days": streak,
+        "active_today": active_today,
+        "freeze_days": freeze_days,
+        "marks": marks,
+    }
+
 
 def _as_daily_activity(raw) -> dict:
     """Ячейка стрика как словарь. Чтение не выдаёт номер Q и ничего не пишет."""
@@ -132,6 +179,7 @@ async def get_current_user(token: str, pool):
             "access_until": access_until,
             "current_exercise": current_exercise,
             "daily_activity": daily_activity,
+            "streak_view": streak_view(daily_activity),
             "role": role,
             "jti": jti
         }

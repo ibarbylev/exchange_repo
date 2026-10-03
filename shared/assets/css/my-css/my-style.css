@@ -535,3 +535,106 @@ small {
         font-size: 16px;
     }
 }
+
+/* Индикатор серии дней в шапке. Цвета и кнопка — как button-in-table-green / check. */
+.header-top-right .streak-indicator {
+    position: relative;
+}
+
+.streak-panel {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 100%;
+    z-index: 9999;
+    width: 280px;
+    background: #ffffff;
+    color: #2d3e50;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+    padding: 14px 16px 16px;
+    text-align: left;
+    line-height: 1.4;
+}
+
+.header-top-right .streak-indicator:hover .streak-panel {
+    display: block;
+}
+
+.streak-panel-title {
+    font-family: "montserratregular";
+    font-size: 14px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.streak-panel p {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: #2d3e50;
+}
+
+.streak-count {
+    font-size: 28px;
+    line-height: 1;
+    color: #86bc42;
+    margin-bottom: 10px;
+}
+
+.streak-count span {
+    font-size: 14px;
+    color: #2d3e50;
+}
+
+.streak-caption {
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+.streak-marks {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.streak-mark {
+    text-align: center;
+    min-width: 28px;
+}
+
+.streak-mark i {
+    color: #86bc42;
+    font-size: 16px;
+}
+
+.streak-mark.is-done i,
+.header-top-right .streak-indicator.is-done > a i {
+    color: #f39c12;
+}
+
+.streak-mark.is-pending i {
+    color: #86bc42;
+}
+
+.streak-mark span {
+    display: block;
+    font-size: 11px;
+    color: #2d3e50;
+}
+
+.streak-mark.is-today span {
+    color: #86bc42;
+}
+
+.streak-mark.is-done.is-today span {
+    color: #f39c12;
+}
+
+.streak-freeze {
+    font-size: 12px;
+}
+
+.streak-panel .button-in-table-green {
+    width: 100%;
+    padding: 10px 16px;
+    cursor: default;
+}

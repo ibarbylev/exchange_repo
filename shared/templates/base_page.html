@@ -103,7 +103,61 @@
                                                 </ul>
                                             {% endif %}
                                         </div>
-                                        <div class="content"><a href="#"><i class="zmdi zmdi-favorite"></i> Wishlist</a></div>
+                                        {# Серия дней вместо Wishlist. FA6, та же сборка, что fa-person-chalkboard / fa-chalkboard-user.
+                                           Варианты короны из бесплатного набора: fa-crown (взята), fa-chess-queen, fa-award. #}
+                                        {% set streak_user = request.state.user if request.state.is_authenticated and request.state.user else none %}
+                                        {% set daily = streak_user.daily_activity if streak_user and streak_user.daily_activity else {} %}
+                                        {% set streak_view = streak_user.streak_view if streak_user and streak_user.streak_view else {} %}
+                                        {% set streak_days = streak_view.streak_days if streak_view.streak_days is defined else (daily.streak|default(0)) %}
+                                        {% set streak_days = streak_days|int %}
+                                        {% set active_today = streak_view.active_today if streak_view.active_today is defined else false %}
+                                        {% set freeze_days = streak_view.freeze_days if streak_view.freeze_days is defined else (daily.freeze|default(0)|int) %}
+                                        {% set streak_marks = streak_view.marks if streak_view.marks is defined else [] %}
+                                        {% set n10 = streak_days % 10 %}
+                                        {% set n100 = streak_days % 100 %}
+                                        {% if n10 == 1 and n100 != 11 %}{% set streak_unit = "день" %}
+                                        {% elif n10 >= 2 and n10 <= 4 and (n100 < 12 or n100 > 14) %}{% set streak_unit = "дня" %}
+                                        {% else %}{% set streak_unit = "дней" %}{% endif %}
+                                        <div class="content streak-indicator{% if active_today %} is-done{% endif %}">
+                                            {% if streak_user %}
+                                            <a href="javascript:void(0)"><i class="fa-solid fa-crown"></i> {{ streak_days }}</a>
+                                            <div class="streak-panel">
+                                                <div class="streak-panel-title">Серия занятий</div>
+                                                {% if streak_days > 0 and active_today %}
+                                                <p>Поздравляем! Сегодняшний день уже засчитан. Занимайтесь каждый день, чтобы серия росла.</p>
+                                                {% elif streak_days > 0 %}
+                                                <p>Серия пока держится. Сегодня день ещё не засчитан — выполните дневное задание, чтобы она не прервалась.</p>
+                                                {% else %}
+                                                <p>Серия ещё не начата. Выполните дневное задание, и засчитается первый день.</p>
+                                                {% endif %}
+                                                <div class="streak-count">{{ streak_days }} <span>{{ streak_unit }}</span></div>
+                                                {% if streak_marks %}
+                                                <div class="streak-caption">{% if streak_days > 7 %}последние 7 дней{% else %}дни серии{% endif %}</div>
+                                                <div class="streak-marks" id="streakMarks">
+                                                    {% for mark in streak_marks %}
+                                                    <div class="streak-mark{% if mark.done %} is-done{% else %} is-pending{% endif %}{% if mark.is_today %} is-today{% endif %}">
+                                                        <i class="fa-solid fa-crown"></i>
+                                                        <span>{% if mark.is_today %}сегодня{% else %}{{ mark.label }}{% endif %}</span>
+                                                    </div>
+                                                    {% endfor %}
+                                                </div>
+                                                {% elif streak_days > 0 %}
+                                                <div class="streak-caption">дни серии</div>
+                                                <div class="streak-marks" id="streakMarks" data-streak="{{ streak_days }}" data-last-on="{{ daily.last_on|default('') }}"></div>
+                                                {% endif %}
+                                                <p class="streak-freeze">
+                                                    {% if freeze_days > 0 %}
+                                                    У Вас есть заморозка серии на 1 день.
+                                                    {% else %}
+                                                    Заморозка серии на 1 день пока недоступна. Позже её можно будет получить за баллы лояльности.
+                                                    {% endif %}
+                                                </p>
+                                                <button type="button" class="button-in-table-green" id="streakDailyTask">Дневное задание</button>
+                                            </div>
+                                            {% else %}
+                                            <a href="{{ url_for_sheared_assets('auth_login', source_lang=source_lang, ui_lang=ui_lang) }}"><i class="fa-solid fa-crown"></i> Серия</a>
+                                            {% endif %}
+                                        </div>
                                         <div class="content"><a href="{{ url_for_sheared_assets('cart', source_lang=source_lang, ui_lang=ui_lang) }}"><i class="zmdi zmdi-shopping-basket"></i>{{ _("Cart") }}</a></div>
                                     </div>
                                 </div>
@@ -676,5 +730,41 @@
             })();
         </script>
 
+
+        <script>
+            (function () {
+                var root = document.getElementById("streakMarks");
+                if (!root || root.children.length || !root.getAttribute("data-last-on")) return;
+                var streak = parseInt(root.getAttribute("data-streak") || "0", 10);
+                var lastOn = root.getAttribute("data-last-on");
+                var show = Math.min(streak, 7);
+                if (!show || !lastOn) return;
+                var parts = lastOn.slice(0, 10).split("-");
+                var end = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+                if (isNaN(end.getTime())) return;
+                var names = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"];
+                var now = new Date();
+                var activity = new Date(now.getTime() - 7 * 60 * 60 * 1000);
+                var todayKey = activity.getFullYear() + "-" + activity.getMonth() + "-" + activity.getDate();
+                for (var i = show - 1; i >= 0; i--) {
+                    var day = new Date(end.getTime());
+                    day.setDate(end.getDate() - i);
+                    var key = day.getFullYear() + "-" + day.getMonth() + "-" + day.getDate();
+                    var mark = document.createElement("div");
+                    var done = key !== todayKey || lastOn.slice(0, 10) === parts.join("-") && key === todayKey;
+                    mark.className = "streak-mark" + (done ? " is-done" : " is-pending") + (key === todayKey ? " is-today" : "");
+                    mark.innerHTML = '<i class="fa-solid fa-crown"></i><span></span>';
+                    mark.lastChild.textContent = key === todayKey ? "сегодня" : names[(day.getDay() + 6) % 7];
+                    root.appendChild(mark);
+                }
+                var endKey = end.getFullYear() + "-" + end.getMonth() + "-" + end.getDate();
+                if (endKey !== todayKey && root.children.length < 7) {
+                    var pending = document.createElement("div");
+                    pending.className = "streak-mark is-pending is-today";
+                    pending.innerHTML = '<i class="fa-solid fa-crown"></i><span>сегодня</span>';
+                    root.appendChild(pending);
+                }
+            })();
+        </script>
     </body>
 </html>
