@@ -547,7 +547,7 @@ small {
     right: 0;
     top: 100%;
     z-index: 9999;
-    width: 280px;
+    width: 292px;
     background: #ffffff;
     color: #2d3e50;
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
@@ -606,9 +606,13 @@ small {
     font-size: 16px;
 }
 
-.streak-mark.is-done i,
-.header-top-right .streak-indicator.is-done > a i {
+.streak-mark.is-done i {
     color: #f39c12;
+}
+
+/* Корона в шапке: жёлтая на зелёном фоне. В панели цвет не меняем. */
+.header-top-right .streak-indicator.is-done > a i {
+    color: #ffd54a;
 }
 
 .streak-mark.is-pending i {
