@@ -393,28 +393,38 @@
                 {% set feedback_next = request.url.path ~ (('?' ~ request.url.query) if request.url.query else '') %}
 
                 <!--Footer Feedback Area Start-->
-                <div class="row">
-                    <div class="col-12 col-md-4 offset-md-4 text-center mb-4">
-                        {% if is_auth %}
-                        <button type="button"
-                                class="btn button-in-table-green"
-                                data-toggle="modal"
-                                data-target="#feedbackModal"
-                                style="width: 100%;">
-                            <i class="fa-solid fa-comment"></i> Появились вопросы? <br>Форма обратной связи к Вашим услугам!
-                        </button>
-                        {% else %}
-                        <a class="btn button-in-table-green"
-                           href="/{{ source_lang }}/{{ ui_lang }}/auth/login/?next={{ feedback_next | urlencode }}&amp;msg=feedback_auth"
-                           onclick="document.cookie='flash=feedback_need_login; Path=/; Max-Age=60; SameSite=Lax'"
-                           style="width: 100%">
-                            <i class="fa-solid fa-comment"></i> Появились вопросы? <br>Форма обратной связи к Вашим услугам!
-                        </a>
-                        {% endif %}
+                <div class="newsletter-area">
+                    <div class="container">
+                        <div class="row">
+                            <div class="col-lg-5 col-md-5">
+                                <div class="newsletter-content">
+                                    <h3>Появились вопросы?</h3>
+                                    <h2>Задайте их прямо здесь!</h2>
+                                </div>
+                            </div>
+                            <div class="col-lg-7 col-md-7">
+                                <div class="newsletter-form angle">
+                                    {% if is_auth %}
+                                    <button type="button"
+                                            class="slant-btn"
+                                            data-toggle="modal"
+                                            data-target="#feedbackModal">
+                                        Открыть форму обратной связи
+                                    </button>
+                                    {% else %}
+                                    <a class="slant-btn"
+                                       href="/{{ source_lang }}/{{ ui_lang }}/auth/login/?next={{ feedback_next | urlencode }}&msg=feedback_auth"
+                                       onclick="document.cookie='flash=feedback_need_login; Path=/; Max-Age=60; SameSite=Lax'">
+                                        Открыть форму обратной связи
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <!--End of Footer Feedback Area-->
-
+                <br>
                 <!--Footer Widget Area Start-->
                 <div class="footer-widget-area">
                     <div class="container">

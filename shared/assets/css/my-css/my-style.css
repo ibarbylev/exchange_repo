@@ -638,3 +638,87 @@ small {
     padding: 10px 16px;
     cursor: default;
 }
+
+/* ====================== New Feedback Start ========================= */
+
+.slant-btn {
+    all: unset;
+    box-sizing: border-box;
+    position: relative;
+    isolation: isolate;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 555px;
+    max-width: calc(100% - 110px);
+    height: 56px;
+    margin-left: 110px;
+    padding: 0 20px 0 30px;
+    background: #88bb44;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    text-transform: uppercase;
+    cursor: pointer;
+    /* левый край как "\" */
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 30px 100%);
+    transition: background .3s;
+}
+
+/* внутренняя тёмная заливка, на 2px меньше кнопки */
+.slant-btn::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    bottom: 2px;
+    left: 2px;
+    z-index: -1;
+    background: #2d3e50;
+    /* тот же угол скоса, сдвинутый на 2px внутрь */
+    clip-path: polygon(1.34px 0, 100% 0, 100% 100%, 29.2px 100%);
+    opacity: 0;
+    transition: opacity .3s;
+}
+
+.slant-btn:hover {
+    background: #fff;            /* это и есть белый контур 2px */
+    color: #fff !important;      /* текст остаётся белым */
+}
+.slant-btn:hover::before {
+    opacity: 1;
+}
+
+/* hover только для устройств с мышью (на телефонах не залипает) */
+@media (hover: hover) and (pointer: fine) {
+    .slant-btn:hover {
+        background: #fff;
+        color: #fff !important;
+    }
+    .slant-btn:hover::before {
+        opacity: 1;
+    }
+}
+
+/* планшеты: отступ больше, чтобы кнопка не заходила на зелёный скос */
+@media (min-width: 768px) and (max-width: 991px) {
+    .slant-btn {
+        margin-left: 90px;
+        width: auto;
+        max-width: calc(100% - 90px);
+        min-width: 320px;
+    }
+}
+
+/* телефоны: кнопка ниже зелёной плашки, на всю ширину колонки */
+@media (max-width: 767px) {
+    .slant-btn {
+        display: flex;
+        margin: 40px 0 0 0;
+        width: 100%;
+        max-width: 100%;
+        font-size: 13px;
+    }
+}
+
+/* ====================== New Feedback End ========================= */
