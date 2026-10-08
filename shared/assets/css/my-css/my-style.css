@@ -685,14 +685,6 @@ small {
     transition: opacity .3s;
 }
 
-.slant-btn:hover {
-    background: #fff;            /* это и есть белый контур 2px */
-    color: #fff !important;      /* текст остаётся белым */
-}
-.slant-btn:hover::before {
-    opacity: 1;
-}
-
 /* hover только для устройств с мышью (на телефонах не залипает) */
 @media (hover: hover) and (pointer: fine) {
     .slant-btn:hover {
@@ -726,3 +718,69 @@ small {
 }
 
 /* ====================== New Feedback End ========================= */
+
+/* =================== Loyalty Base Page Start ===================== */
+
+.header-top-right {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 0 !important;
+}
+
+.header-top-right > .content {
+    flex-shrink: 0;
+    margin: 0 !important;
+    padding: 0 10px !important;
+    position: relative;
+    white-space: nowrap;
+}
+
+/* Равные отступы вокруг вертикальных разделителей */
+.header-top-right > .content + .content::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: 14px;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.loyalty-indicator a,
+.streak-indicator a {
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Фикс модального окна серии: текст должен переноситься */
+.streak-panel {
+    white-space: normal !important;
+    max-width: 340px;
+    min-width: 260px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.streak-panel p,
+.streak-panel .streak-panel-title,
+.streak-panel .streak-freeze {
+    white-space: normal !important;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+@media (max-width: 991px) {
+    .header-top-right > .content {
+        padding: 0 6px !important;
+    }
+    .header-top-right {
+        font-size: 13px;
+    }
+}
+
+/* =================== Loyalty Base Page End ===================== */

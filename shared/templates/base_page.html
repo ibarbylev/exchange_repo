@@ -158,6 +158,15 @@
                                             <a href="{{ url_for_sheared_assets('auth_login', source_lang=source_lang, ui_lang=ui_lang) }}"><i class="fa-solid fa-crown"></i> Серия</a>
                                             {% endif %}
                                         </div>
+                                        {# Программа лояльности #}
+                                        {% set loyalty_points = streak_user.loyalty_points|default(0)|int if streak_user else 0 %}
+                                        <div class="content loyalty-indicator">
+                                            {% if streak_user %}
+                                            <a href="{{ url_for_sheared_assets('loyalty', source_lang=source_lang, ui_lang=ui_lang) }}" title="Баллы лояльности"><i class="fa-solid fa-trophy"></i> {{ loyalty_points }}</a>
+                                            {% else %}
+                                            <a href="{{ url_for_sheared_assets('auth_login', source_lang=source_lang, ui_lang=ui_lang) }}" title="Баллы лояльности"><i class="fa-solid fa-trophy"></i></a>
+                                            {% endif %}
+                                        </div>
                                         <div class="content"><a href="{{ url_for_sheared_assets('cart', source_lang=source_lang, ui_lang=ui_lang) }}"><i class="zmdi zmdi-shopping-basket"></i>{{ _("Cart") }}</a></div>
                                     </div>
                                 </div>

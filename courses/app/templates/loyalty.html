@@ -1,0 +1,34 @@
+{% extends "base_page.html" %}
+
+{% block title %}Программа лояльности{% endblock %}
+
+{% block content %}
+<div class="container" style="padding: 40px 15px;">
+    <div class="row">
+        <div class="col-lg-8 offset-lg-2">
+            <div class="section-title text-center" style="margin-bottom: 30px;">
+                <h2>Программа лояльности</h2>
+                <p>Ваши баллы: <strong style="font-size: 1.5em; color: #f39c12;"><i class="fa-solid fa-star"></i> {{ points|default(0) }}</strong></p>
+            </div>
+            <div class="loyalty-info" style="background: #f9f9f9; padding: 25px; border-radius: 8px; border: 1px solid #eee;">
+                <h3>Как заработать баллы</h3>
+                <ul>
+                    <li>Ежедневное посещение и выполнение дневного задания</li>
+                    <li>Покупки курсов и материалов</li>
+                    <li>Участие в акциях и достижениях</li>
+                </ul>
+                <h3 style="margin-top: 20px;">Как потратить</h3>
+                <ul>
+                    <li>Заморозка серии на 1 день</li>
+                    <li>Скидки на курсы</li>
+                    <li>Другие привилегии</li>
+                </ul>
+                <p style="margin-top: 20px; font-style: italic;">История транзакций появится позже. Баллы рассчитываются как сумма всех операций в таблице loyalty.</p>
+                {% if not request.state.is_authenticated %}
+                <p><a href="{{ url_for_sheared_assets('auth_login', source_lang=source_lang, ui_lang=ui_lang) }}" class="button">Войти, чтобы видеть свои баллы</a></p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
