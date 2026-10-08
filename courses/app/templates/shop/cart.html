@@ -1,0 +1,169 @@
+{% extends "base_page.html" %}
+
+{% block title %}Корзина{% endblock %}
+
+{% block container %}
+
+<div class="container section-padding">
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="section-title">
+                <h3 style="margin-top: 8px;">Корзина</h3>
+            </div>
+        </div>
+    </div>
+<!--------------------------------------------------------------------------------------->
+    <div class="container section-padding">
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="section-title-wrapper">
+                    <div class="section-title">
+                        <h3 style="margin-top: 8px;">Ваша корзина</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cart-table-wrapper">
+
+            <table class="cart-table">
+                <thead>
+                    <tr>
+                        <th class="option-col">Наименование продукта</th>
+                        <th class="col-description text-center">Описание</th>
+                        <th class="col-qty text-center">Кол-во</th>
+                        <th class="col-price text-center active-plan">Цена</th>
+                        <th class="col-discount text-center">Скидка</th>
+                        <th class="col-total text-center active-plan">Сумма</th>
+                        <th class="col-actions text-center active-plan">Действия</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% if items %}
+                        {% for item in items %}
+                        <tr>
+                            <td class="option-name">{{ item.name }}</td>
+                            <td class="product-description">
+                                <a href="/{{ source_lang }}/{{ ui_lang }}/courses-details/?slug={{ item.slug }}">Подробное описание →</a>
+                            </td>
+                            <td class="text-center">{{ item.quantity }}</td>
+                            <td class="text-center">€{{ item.price }}</td>
+                            <td class="text-center">
+                                {% if item.discount > 0 %}
+                                    {{ (item.discount / item.price * 100)|round(0) }}%
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td class="price-final text-center">€{{ item.subtotal }}</td>
+                            <td class="text-center">
+                                <!-- Кнопка удаления -->
+                                <button type="button"
+                                        class="btn button-in-table-black delete-item-btn"
+                                        data-item-id="{{ item.id }}"
+                                        data-action="{{ url_for('cart_remove', source_lang=source_lang, ui_lang=ui_lang) }}">
+                                    {{ _("Delete") }}
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <h4>Ваша корзина пуста</h4>
+                                <p>Добавьте товары из каталога курсов.</p>
+                                <a class="button-in-table-green"
+                                        href="{{ url_for('courses_list', source_lang=source_lang, ui_lang=ui_lang) }}">
+                                    Перейти к курсам
+                                </a>
+                            </td>
+                        </tr>
+                    {% endif %}
+
+                    <!-- Итог -->
+                    <tr class="summary-row">
+                        <td colspan="5" class="summary-title text-right">ИТОГОВАЯ СУММА</td>
+                        <td class="summary-value text-center">€{{ total_amount|round(2) }}</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+
+        </div>
+
+        {% if items %}
+        <div class="container mt-5">
+            <div class="row justify-content-center">
+                <div class="col-lg-10">
+                    <div class="row">
+                        <div class="col-6 pr-100 text-left">
+                            <a href="{{ url_for('courses_list', source_lang=source_lang, ui_lang=ui_lang) }}"
+                               class="btn button-in-table-black">
+                                Продолжить покупки
+                            </a>
+                        </div>
+
+                        <div class="col-6 pl-100 text-right">
+                            <a href="{{ url_for('cart_checkout', source_lang=source_lang, ui_lang=ui_lang) }}"
+                               class="btn button-in-table-green">
+                                Оформить заказ
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<!------- Модальное окно подтверждение удаления ---------------->
+<div class="modal fade" id="deleteItemModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title w-100 text-center">Удаление товара</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+
+            <div class="modal-body text-center">
+                Вы уверены, что хотите удалить этот товар из корзины?
+            </div>
+
+            <div class="modal-footer d-flex justify-content-center">
+                <form id="deleteItemForm" method="post" style="margin:0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="item_id" id="delete-item-id">
+
+                    <button type="submit"
+                            class="btn button-in-table-black modal-btn">
+                        Удалить
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+{% block js_scripts %})
+<script>
+    $(document).on('click', '.delete-item-btn', function () {
+        const itemId = $(this).data('item-id');
+        const action = $(this).data('action');
+
+        $('#delete-item-id').val(itemId);
+        $('#deleteItemForm').attr('action', action);
+
+        $('#deleteItemModal').modal('show');
+    });
+</script>
+{% endblock %}

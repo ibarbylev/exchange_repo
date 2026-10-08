@@ -1,0 +1,116 @@
+{% extends "base_page.html" %}
+
+{% block title %}Оформление заказа{% endblock %}
+
+{% block container %}
+
+<div class="container section-padding">
+
+    <!-- Заголовок -->
+    <div class="row">
+        <div class="col-md-12">
+            <div class="section-title">
+                <h3 style="margin-top: 8px;">
+                    Оформление заказа #{{ order.id }}
+                    <span class="text-muted" style="font-size: 1.2rem;">от {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
+                </h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="cart-table-wrapper mt-4">
+
+        <table class="table table-bordered ">
+            <thead class="table-active font-weight-bold text-uppercase text-center">
+                <tr>
+                    <th>Наименование продукта</th>
+                    <th >Кол-во</th>
+                    <th>Цена</th>
+                    <th>Скидка</th>
+                    <th>Сумма</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="option-name">{{ item.name }}</td>
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-center">€{{ item.price }}</td>
+                    <td class="text-center">
+                        {% if item.discount > 0 %}
+                            {{ (item.discount / item.price * 100)|round(0) }}%
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                    <td class="price-final text-center">€{{ item.subtotal }}</td>
+                </tr>
+                {% endfor %}
+
+                <!-- Промокод -->
+                <tr>
+                    <td colspan="5">
+                        <form>
+                            <div class="d-flex justify-content-center align-items-center gap-1">
+                                <input type="text"
+                                       class="form-control form-control mr-2"
+                                       placeholder="Промокод"
+                                       style="max-width: 160px;">
+
+                                <button class="btn promo-btn">
+                                    Добавить промокод
+                                </button>
+                            </div>
+                        </form>
+                    </td>
+                </tr>
+
+                <!-- Итог -->
+                <tr class="summary-row font-weight-bold table-active">
+                    <td colspan="4" class="summary-title text-right">ИТОГОВАЯ СУММА</td>
+                    <td class="summary-value text-center">€{{ total_amount|round(2) }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+    </div>
+
+    <!-- Кнопки -->
+    {% if items %}
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="row">
+                    <div class="col-6 pr-100 text-left">
+                        <a href="{{ url_for('cart', source_lang=source_lang, ui_lang=ui_lang) }}"
+                           class="btn button-in-table-black">
+                            Назад в корзину
+                        </a>
+                    </div>
+
+                    <div class="col-6 pl-100 text-right">
+                        {% if not pending_order %}
+                        <form action="{{ url_for('cart_select_payment_post', source_lang=source_lang, ui_lang=ui_lang) }}" method="post">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <button type="submit" class="btn button-in-table-green">
+                                Перейти к оплате
+                            </button>
+                        </form>
+                        {% else %}
+                            <button class="btn button-in-table-green bg-danger disabled" style="cursor: not-allowed">
+                                Невозможно перейти к оплате<br>
+                                <span style="text-transform: none;">(Оплатите или удалите неоплаченные заказы)</span>
+                            </button>
+
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+{% endblock %}
