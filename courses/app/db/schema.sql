@@ -14,8 +14,6 @@ CREATE TABLE IF NOT EXISTS users (
     patronymic          VARCHAR(150),
     phone               VARCHAR(32),
 
-    loyalty_points      INTEGER DEFAULT 0 CHECK (loyalty_points >= 0),
-
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_login          TIMESTAMPTZ,
@@ -381,6 +379,19 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 
 
+
+--------------------------------------------------------------------------------
+-- 10. Таблица баллов лояльности (feedback)
+--------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS loyalty (
+    id                  INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    points              INTEGER NOT NULL,                    -- + начисление, − списание
+    reason              TEXT,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_loyalty_user_id ON loyalty(user_id);
 
 
 
