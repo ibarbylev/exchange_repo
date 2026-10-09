@@ -1,56 +1,85 @@
 import secrets
-from fastapi import Request, HTTPException, Form
+from fastapi import Request, HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
 CSRF_COOKIE_NAME = "csrf_token"
 CSRF_FORM_FIELD = "csrf_token"
+CSRF_HEADER_NAMES = ("x-csrf-token", "x-csrftoken")
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
 
 
 def generate_csrf_token() -> str:
-    """Генерирует безопасный CSRF-токен"""
     return secrets.token_urlsafe(32)
+
+
+def _cookie_value(request: Request) -> str | None:
+    value = request.cookies.get(CSRF_COOKIE_NAME)
+    return value if value else None
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        # Если токена ещё нет — генерируем
-        if CSRF_COOKIE_NAME not in request.cookies:
-            token = generate_csrf_token()
-            request.state.csrf_token = token
+        existing = _cookie_value(request)
+        if existing:
+            request.state.csrf_token = existing
         else:
-            request.state.csrf_token = request.cookies.get(CSRF_COOKIE_NAME)
+            request.state.csrf_token = generate_csrf_token()
 
         response = await call_next(request)
 
-        # Устанавливаем cookie, если его ещё не было
-        if CSRF_COOKIE_NAME not in request.cookies:
+        # Ставим куку только если токен реально отдали клиенту
+        # (через get_csrf_token в шаблоне или в JSON-эндпоинте)
+        if not existing and getattr(request.state, "csrf_token_used", False):
             response.set_cookie(
                 key=CSRF_COOKIE_NAME,
                 value=request.state.csrf_token,
                 httponly=True,
                 samesite="lax",
-                secure=False,           # В продакшене поставь True
-                max_age=60 * 60 * 24 * 30,  # 30 дней
+                secure=False,  # settings.SECURE_COOKIES
+                path="/",
+                max_age=60 * 60 * 24 * 30,
             )
+            response.headers["Cache-Control"] = "private, no-store"
 
         return response
 
 
 def get_csrf_token(request: Request) -> str:
-    """Зависимость для получения токена в шаблонах"""
-    return getattr(request.state, "csrf_token", "")
+    """Вызывать там, где токен реально вставляется в ответ (шаблон или JSON)."""
+    request.state.csrf_token_used = True
+    return getattr(request.state, "csrf_token", "") or ""
 
 
-def verify_csrf(request: Request, csrf_token: str = Form(None)):
-    """
-    Проверка CSRF-токена.
-    Возвращает 403, если токен отсутствует или невалиден.
-    """
-    if not csrf_token:
-        raise HTTPException(status_code=403, detail="CSRF token is missing")
+async def verify_csrf(request: Request):
+    if request.method in SAFE_METHODS:
+        return
 
-    cookie_token = request.cookies.get("csrf_token")
+    token = None
+    for header in CSRF_HEADER_NAMES:
+        token = request.headers.get(header)
+        if token:
+            break
 
-    if not cookie_token or csrf_token != cookie_token:
-        raise HTTPException(status_code=403, detail="CSRF token is missing or invalid")
+    if not token:
+        content_type = (request.headers.get("content-type") or "").lower()
+        if (
+            "application/x-www-form-urlencoded" in content_type
+            or "multipart/form-data" in content_type
+        ):
+            form = await request.form()
+            value = form.get(CSRF_FORM_FIELD)
+            token = value if isinstance(value, str) else None
+
+    cookie_token = _cookie_value(request)
+
+    if (
+        not isinstance(token, str)
+        or not token
+        or not cookie_token
+        or not secrets.compare_digest(
+            token.encode("utf-8"), cookie_token.encode("utf-8")
+        )
+    ):
+        raise HTTPException(status_code=403, detail="CSRF token missing or invalid")
+

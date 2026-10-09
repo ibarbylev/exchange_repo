@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse
 from typing import Any, Annotated
 
 from app.core.config import templates, SUPPORTED_UI_LANGUAGES, DEFAULT_SOURCE_LANGUAGE, DEFAULT_UI_LANGUAGE
+from app.middleware.csrf import get_csrf_token
 
 
 class LangPair:
@@ -50,7 +51,7 @@ def render_template(
         "request": request,
         "source_lang": lang_pair.source_lang,
         "ui_lang": lang_pair.ui_lang,
-        "csrf_token": getattr(request.state, "csrf_token", ""),
+        "csrf_token": get_csrf_token(request),  # ставит флаг csrf_token_used
     }
     if context:
         ctx.update(context)
@@ -61,6 +62,7 @@ def render_template(
         context=ctx,
         status_code=status_code
     )
+
 
 def render_template_string(
     request: Request,
@@ -79,7 +81,7 @@ def render_template_string(
         "request": request,
         "source_lang": lang_pair.source_lang,
         "ui_lang": lang_pair.ui_lang,
-        "csrf_token": getattr(request.state, "csrf_token", ""),
+        "csrf_token": get_csrf_token(request),  # ставит флаг csrf_token_used
     }
 
     if context:
