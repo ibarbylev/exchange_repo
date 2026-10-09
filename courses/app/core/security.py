@@ -162,15 +162,18 @@ async def get_current_user(token: str, pool):
 
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                """SELECT access_level, current_exercise, access_until, role, daily_activity
+                """SELECT access_level, current_exercise, access_until, role, 
+                          daily_activity, loyalty_points, has_freeze
                    FROM users WHERE id = $1""",
                 user_id
             )
             access_level = row["access_level"] if row else 0
             current_exercise = row["current_exercise"] if row else 0
-            access_until = row["access_until"].strftime("%Y-%m-%d %H:%M") if row.get("access_until") else None
+            access_until = row["access_until"].strftime("%Y-%m-%d %H:%M") if row and row.get("access_until") else None
             role = row["role"] if row and row.get("role") else "student"
             daily_activity = _as_daily_activity(row["daily_activity"] if row else None)
+            loyalty_points = int(row["loyalty_points"] or 0) if row else 0
+            has_freeze = bool(row["has_freeze"]) if row else False
 
         return {
             "user_id": user_id,
@@ -181,7 +184,9 @@ async def get_current_user(token: str, pool):
             "daily_activity": daily_activity,
             "streak_view": streak_view(daily_activity),
             "role": role,
-            "jti": jti
+            "jti": jti,
+            "loyalty_points": loyalty_points,
+            "has_freeze": has_freeze,
         }
 
     except JWTError as e:
