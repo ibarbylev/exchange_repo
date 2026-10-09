@@ -1,0 +1,153 @@
+{% extends "base_page.html" %}
+
+{% block title %}Дневное задание{% endblock %}
+
+{% block container %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <h2 class="text-center mb-3">Дневное задание</h2>
+
+            {% if error %}
+            <div class="alert alert-warning text-center">{{ error }}</div>
+            <p class="text-center">
+                <a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/" class="button-in-table-green" style="width:auto;">К баллам лояльности</a>
+            </p>
+            {% elif exercise %}
+            <p class="text-center text-muted mb-4">Решите одно упражнение — день будет засчитан.</p>
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div id="questionContainer" class="mb-3 p-3 border rounded bg-light" style="font-size:1.25rem; line-height:2.2;"></div>
+                    <div id="variantsContainer" class="d-flex flex-wrap mb-3"></div>
+                    <div id="resultMessage" class="mt-3"></div>
+                </div>
+            </div>
+
+            <p class="text-center">
+                <button type="button" id="resetBtn" class="btn btn-outline-secondary btn-sm">Начать заново</button>
+            </p>
+            {% else %}
+            <div class="alert alert-info text-center">Сегодня дневное задание уже выполнено.</div>
+            <p class="text-center">
+                <a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/" class="button-in-table-green" style="width:auto;">К баллам лояльности</a>
+            </p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if exercise %}
+<script>
+(function () {
+    var exercise = {{ exercise | tojson }};
+    var csrf = "{{ csrf_token }}";
+    var completeUrl = "/{{ source_lang }}/{{ ui_lang }}/loyalty/daily-task/complete/";
+
+    var questionEl = document.getElementById("questionContainer");
+    var variantsEl = document.getElementById("variantsContainer");
+    var resultEl = document.getElementById("resultMessage");
+    var resetBtn = document.getElementById("resetBtn");
+
+    var slots = [];
+    var filled = [];
+
+    function render() {
+        var i = 0;
+        questionEl.innerHTML = String(exercise.question || "").replace(/\[\]/g, function () {
+            return '<span class="answer-slot d-inline-block border border-success rounded mx-1 px-2" data-i="' + (i++) + '" style="min-width:80px; min-height:32px; background:#fff;"></span>';
+        });
+        slots = [].slice.call(questionEl.querySelectorAll(".answer-slot"));
+        filled = new Array(slots.length).fill(null);
+        renderVariants();
+        resultEl.innerHTML = "";
+    }
+
+    function currentSlot() {
+        for (var i = 0; i < filled.length; i++) {
+            if (filled[i] === null) return i;
+        }
+        return -1;
+    }
+
+    function renderVariants() {
+        variantsEl.innerHTML = "";
+        var idx = currentSlot();
+        if (idx < 0) return;
+        var group = (exercise.variants && exercise.variants[idx]) || [];
+        group.forEach(function (val) {
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn btn-outline-dark m-1";
+            btn.textContent = (val === "" || val === " ") ? " " : val;
+            btn.addEventListener("click", function () { choose(idx, val); });
+            variantsEl.appendChild(btn);
+        });
+    }
+
+    function choose(idx, val) {
+        var slot = slots[idx];
+        if (!slot) return;
+        var correct = (exercise.answers && exercise.answers[idx]) || [];
+        var ok = correct.indexOf(val) !== -1 || correct.indexOf(String(val)) !== -1;
+
+        slot.textContent = (val === "" || val === " ") ? " " : val;
+        slot.classList.remove("border-danger", "border-success");
+        if (!ok) {
+            slot.classList.add("border-danger");
+            slot.style.background = "#fff0f0";
+            setTimeout(function () {
+                slot.textContent = "";
+                slot.classList.remove("border-danger");
+                slot.style.background = "#fff";
+            }, 700);
+            return;
+        }
+        slot.classList.add("border-success");
+        slot.style.background = "#e8f5e9";
+        filled[idx] = val;
+
+        if (filled.every(function (v) { return v !== null; })) {
+            onSuccess();
+        } else {
+            renderVariants();
+        }
+    }
+
+    function onSuccess() {
+        variantsEl.innerHTML = "";
+        resultEl.innerHTML = '<div class="alert alert-success">Верно! Начисляем баллы…</div>';
+
+        fetch(completeUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRF-Token": csrf
+            },
+            credentials: "same-origin",
+            body: JSON.stringify({ exercise_name: exercise.name })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data && data.ok) {
+                resultEl.innerHTML =
+                    '<div class="alert alert-success">' +
+                    'День засчитан! Начислено баллов: <strong>' + (data.points || 0) + '</strong>. ' +
+                    'Серия: ' + (data.streak || 0) + '.' +
+                    '</div>' +
+                    '<p class="text-center mt-3"><a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/" class="button-in-table-green" style="width:auto;">К баллам лояльности</a></p>';
+            } else {
+                resultEl.innerHTML = '<div class="alert alert-warning">Упражнение пройдено, но день уже был засчитан или задание изменилось.</div>';
+            }
+        })
+        .catch(function () {
+            resultEl.innerHTML = '<div class="alert alert-danger">Не удалось связаться с сервером. Попробуйте ещё раз.</div>';
+        });
+    }
+
+    resetBtn.addEventListener("click", render);
+    render();
+})();
+</script>
+{% endif %}
+{% endblock %}
