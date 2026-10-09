@@ -243,14 +243,29 @@ class TestIntensiveProgressFormat:
     def test_migrate_rewrites_flat_legacy_under_language_pair(self):
         from app.repositories.classroom import migrate_intensive_progress
 
-        stored = migrate_intensive_progress(
+        # Без at плоский legacy только раскладывается по паре, курсор не затирается.
+        nested = migrate_intensive_progress(
             {"X": "word_01_synonym_01"},
             "BGRU",
             "X",
             "word_02_quiz_01",
         )
+        assert "X" not in nested
+        assert nested["BGRU"]["X"] == "word_01_synonym_01"
+
+        # at есть только у сдвига вперёд — тогда пишется новый курсор и время.
+        stored = migrate_intensive_progress(
+            {"X": "word_01_synonym_01"},
+            "BGRU",
+            "X",
+            "word_02_quiz_01",
+            at="2026-10-04T01:43:20+03:00",
+        )
         assert "X" not in stored
-        assert stored["BGRU"]["X"] == "word_02_quiz_01"
+        assert stored["BGRU"]["X"] == {
+            "name": "word_02_quiz_01",
+            "at": "2026-10-04T01:43:20+03:00",
+        }
 
     @pytest.mark.asyncio
     async def test_save_progress_uses_block_name_not_word_id(
@@ -280,4 +295,6 @@ class TestIntensiveProgressFormat:
         data = raw if isinstance(raw, dict) else json.loads(raw)
         assert "X" not in data
         assert "BGRU" in data
-        assert data["BGRU"]["X"] == "word_01_synonym_01"
+        # В ячейке имя упражнения и время сдвига, не голая строка и не имя блока.
+        assert data["BGRU"]["X"]["name"] == "word_01_synonym_01"
+        assert data["BGRU"]["X"]["at"]

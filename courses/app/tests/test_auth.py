@@ -429,3 +429,73 @@ async def test_anonymous_current_user_does_not_hit_session_store(client):
 
     assert response.status_code == 401
     assert calls["n"] == 0
+
+# --- CurrentUser.daily_activity ---------------------------------------------
+@pytest.mark.asyncio
+async def test_current_user_includes_empty_daily_activity(db_pool, access_user):
+    """Новый пользователь: словарь есть, номер Q не выдаётся и в базу не пишется."""
+    import uuid
+    from app.core.security import create_access_token, get_current_user
+
+    user_id = await access_user()
+    jti = str(uuid.uuid4())
+    await db_pool.execute(
+        """
+        INSERT INTO user_sessions (user_id, jti, ip_address, user_agent, created_at)
+        VALUES ($1, $2, '127.0.0.1', 'pytest-client', NOW())
+        """,
+        user_id,
+        jti,
+    )
+    token = create_access_token(data={"sub": str(user_id)}, jti=jti)
+
+    user = await get_current_user(token, db_pool)
+
+    assert user["user_id"] == user_id
+    assert user["daily_activity"] == {}
+    stored = await db_pool.fetchval(
+        "SELECT daily_activity FROM users WHERE id = $1",
+        user_id,
+    )
+    assert stored in ({}, "{}", None)
+
+
+@pytest.mark.asyncio
+async def test_current_user_includes_stored_daily_activity(db_pool, access_user):
+    """Уже записанная ячейка попадает в CurrentUser как есть, без выдачи нового Q."""
+    import json
+    import uuid
+    from app.core.security import create_access_token, get_current_user
+
+    user_id = await access_user()
+    payload = {
+        "streak": 4,
+        "last_on": "2026-10-02",
+        "exercise_current": "BGRUA1015_Q003",
+    }
+    await db_pool.execute(
+        "UPDATE users SET daily_activity = $1::jsonb WHERE id = $2",
+        json.dumps(payload),
+        user_id,
+    )
+    jti = str(uuid.uuid4())
+    await db_pool.execute(
+        """
+        INSERT INTO user_sessions (user_id, jti, ip_address, user_agent, created_at)
+        VALUES ($1, $2, '127.0.0.1', 'pytest-client', NOW())
+        """,
+        user_id,
+        jti,
+    )
+    token = create_access_token(data={"sub": str(user_id)}, jti=jti)
+
+    user = await get_current_user(token, db_pool)
+
+    assert user["daily_activity"] == payload
+    stored = await db_pool.fetchval(
+        "SELECT daily_activity FROM users WHERE id = $1",
+        user_id,
+    )
+    if isinstance(stored, str):
+        stored = json.loads(stored)
+    assert stored == payload
