@@ -229,6 +229,15 @@ BEGIN
         SET status = 'paid'
         WHERE id = v_order_id;
 
+        -- Кэшбэк лояльности: 1% от суммы * 1000 → amount * 10
+        IF FLOOR(v_order_amount * 10)::INTEGER > 0 THEN
+            PERFORM insert_into_loyalty(
+                p_user_id,
+                FLOOR(v_order_amount * 10)::INTEGER,
+                'Кэшбэк с покупки ' || TO_CHAR(v_order_amount, 'FM999999990.00') || ' €'
+            );
+        END IF;
+
         SELECT p.slug
         INTO v_slug
         FROM products p

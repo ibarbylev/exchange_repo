@@ -297,6 +297,19 @@ async def test_auto_pay_single_pending_order(db_pool, create_user, create_pendin
     final_balance = await db_pool.fetchval("SELECT get_user_balance($1)", user_id)
     assert final_balance == 50
 
+    # Кэшбэк лояльности: 50€ → 500 баллов
+    loyalty_points = await db_pool.fetchval(
+        "SELECT loyalty_points FROM users WHERE id = $1", user_id
+    )
+    assert loyalty_points == 500
+
+    tx = await db_pool.fetchrow(
+        "SELECT points, reason FROM loyalty WHERE user_id = $1", user_id
+    )
+    assert tx is not None
+    assert tx["points"] == 500
+    assert "50.00" in (tx["reason"] or "")
+
 
 @pytest.mark.asyncio
 async def test_auto_pay_zero_balance_does_not_pay(db_pool, create_user):
