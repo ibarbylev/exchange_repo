@@ -240,3 +240,42 @@ async def test_csrf_protection_admin_access_update(admin_client):
     assert response.status_code != 403, "CSRF protection should not block valid request"
 
 
+
+# ============================================================
+# CLASSROOM JSON endpoints (header X-CSRF-Token)
+# ============================================================
+
+def _ensure_csrf(client):
+    token = client.cookies.get("csrf_token")
+    if not token:
+        token = "test-csrf-token-value"
+        client.cookies.set("csrf_token", token)
+    return {"X-CSRF-Token": token}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "url,payload",
+    [
+        ("/api/user/current-exercise", {"exercise_name": "BGRUA1001_V001"}),
+        ("/api/user/exercise-stars", {"exercise_name": "BGRUA1001_V001", "stars": 2}),
+        ("/api/user/intensive-progress", {
+            "exercise_name": "word_01_synonym_01",
+            "series": "X",
+            "block_name": "some_block",
+            "lang_prefix": "BGRU",
+        }),
+    ],
+)
+async def test_classroom_json_csrf_required(auth_client, url, payload):
+    """Без заголовка — 403, с X-CSRF-Token — не 403."""
+    client, _ = auth_client
+
+    # без токена
+    response = await client.post(url, json=payload)
+    assert response.status_code == 403, f"{url} must reject missing CSRF"
+
+    # с заголовком (кука тоже ставится)
+    headers = _ensure_csrf(client)
+    response = await client.post(url, json=payload, headers=headers)
+    assert response.status_code != 403, f"{url} must accept valid CSRF header"

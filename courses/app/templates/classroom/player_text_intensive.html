@@ -487,7 +487,10 @@ window.TextLab = {
         this.stars[exerciseId] = next;
         return fetch('/api/user/exercise-stars', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                (window.Classroom && Classroom.csrf && Classroom.csrf.headers && Classroom.csrf.headers()) || {}
+            ),
             body: JSON.stringify({ exercise_name: exerciseId, stars: next })
         }).catch(() => {});
     },
@@ -509,7 +512,10 @@ window.TextLab = {
         const block = blockName || this.themeKey || '';
         return fetch('/api/user/intensive-progress', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                (window.Classroom && Classroom.csrf && Classroom.csrf.headers && Classroom.csrf.headers()) || {}
+            ),
             body: JSON.stringify({
                 exercise_name: exerciseId,
                 series: this.series || 'X',

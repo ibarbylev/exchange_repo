@@ -4,6 +4,8 @@
 
 {% block container %}
 
+<meta name="csrf-token" content="{{ csrf_token }}">
+
 <link rel="stylesheet" href="/static/css/my-css/word-translator.css">
 
 <style>
@@ -314,6 +316,17 @@
     'use strict';
 
     window.Classroom = window.Classroom || {};
+    Classroom.csrf = {
+        token: function () {
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            return meta ? (meta.getAttribute('content') || '') : '';
+        },
+        headers: function () {
+            const t = this.token();
+            return t ? { 'X-CSRF-Token': t } : {};
+        }
+    };
+
 
     Classroom.layout = {
         storageKey: 'classroomPlayerWide',

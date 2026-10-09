@@ -649,6 +649,7 @@ async def save_current_exercise(
     pool: DBPoolDep,
     current_user: CurrentUser,
     exercise_name: str = Body(..., embed=True),
+    _: None = Depends(verify_csrf),
 ):
     """Двигает курсор интерактива только вперёд и только внутри языковой пары."""
     user_id = _user_pk(current_user)
@@ -710,6 +711,7 @@ async def save_exercise_stars(
     current_user: CurrentUser,
     exercise_name: str = Body(..., embed=True),
     stars: int = Body(..., embed=True),
+    _: None = Depends(verify_csrf),
 ):
     """Пишет качество упражнения. На сервере всегда max(old, new)."""
     user_id = _user_pk(current_user)
@@ -747,6 +749,7 @@ async def save_intensive_progress(
     series: str = Body("X", embed=True),
     block_name: str | None = Body(None, embed=True),
     lang_prefix: str | None = Body(None, embed=True),
+    _: None = Depends(verify_csrf),
 ):
     """Двигает курсор Text Intensive (X) только вперёд и только внутри языковой пары.
 

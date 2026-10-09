@@ -10,6 +10,15 @@ from app.repositories.classroom import (
 )
 
 
+def _ensure_csrf(client):
+    """Ставит csrf_token в куки (если нет) и возвращает заголовки для JSON-запросов."""
+    token = client.cookies.get("csrf_token")
+    if not token:
+        token = "test-csrf-token-value"
+        client.cookies.set("csrf_token", token)
+    return {"X-CSRF-Token": token}
+
+
 async def _create_theme_with_exercises(db_pool, access_levels=None):
     """Курс → урок → тема + стартеры V/Q/T с разной видимостью."""
     unique_id = f"{int(datetime.now().timestamp() * 1000000)}_{uuid.uuid4().hex[:8]}"
@@ -206,6 +215,7 @@ class TestCurrentExerciseCursor:
         res = await client.post(
             "/api/user/current-exercise",
             json={"exercise_name": data["first_b"]},
+            headers=_ensure_csrf(client),
         )
         assert res.status_code == 200
         payload = res.json()
@@ -227,12 +237,14 @@ class TestCurrentExerciseCursor:
         first = await client.post(
             "/api/user/current-exercise",
             json={"exercise_name": data["first_b"]},
+            headers=_ensure_csrf(client),
         )
         assert first.json()["success"] is True
 
         back = await client.post(
             "/api/user/current-exercise",
             json={"exercise_name": data["first_a"]},
+            headers=_ensure_csrf(client),
         )
         assert back.json()["success"] is True
         assert back.json()["current_exercise"]["BGRU"] == data["first_b"]

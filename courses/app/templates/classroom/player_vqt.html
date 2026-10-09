@@ -164,7 +164,10 @@
         dbg('POST /api/user/current-exercise', name);
         return fetch('/api/user/current-exercise', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                (window.Classroom && Classroom.csrf && Classroom.csrf.headers && Classroom.csrf.headers()) || {}
+            ),
             body: JSON.stringify({ exercise_name: name })
         }).catch(function (err) {
             dbg('current-exercise failed', err);
@@ -176,7 +179,10 @@
         dbg('POST /api/user/exercise-stars', name, stars);
         return fetch('/api/user/exercise-stars', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: Object.assign(
+                { 'Content-Type': 'application/json' },
+                (window.Classroom && Classroom.csrf && Classroom.csrf.headers && Classroom.csrf.headers()) || {}
+            ),
             body: JSON.stringify({ exercise_name: name, stars: stars })
         }).catch(function (err) {
             dbg('exercise-stars failed', err);

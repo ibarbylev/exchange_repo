@@ -43,6 +43,16 @@ EXPECTED_BLOCKS = [
 ]
 
 
+
+def _ensure_csrf(client):
+    """Ставит csrf_token в куки (если нет) и возвращает заголовки для JSON-запросов."""
+    token = client.cookies.get("csrf_token")
+    if not token:
+        token = "test-csrf-token-value"
+        client.cookies.set("csrf_token", token)
+    return {"X-CSRF-Token": token}
+
+
 def _json_path(stem: str) -> Path:
     return DATA_DIR / f"{stem}.json"
 
@@ -281,6 +291,7 @@ class TestIntensiveProgressFormat:
                 "block_name": first,
                 "lang_prefix": "BGRU",
             },
+            headers=_ensure_csrf(client),
         )
         assert res.status_code == 200
         body = res.json()
