@@ -12,6 +12,7 @@ from app.middleware.csrf import verify_csrf
 from app.repositories import coach_schedule
 from app.repositories.user import create_user_session
 from app.repositories.shop import pay_order, replenish_balance_and_pay_order
+from app.repositories.loyalty import award_useful_feedback
 from app.routers.feedback import FEEDBACK_TOPICS
 
 
@@ -498,86 +499,6 @@ async def login_as_user(
         samesite="lax",
     )
     return response
-
-
-# @router.post("/gift-access/", response_class=JSONResponse)
-# async def admin_gift_access(
-#     request: Request,
-#     pool: DBPoolDep,
-#     current_superuser: CurrentSuperUser = None,
-#     user_id: int = Form(...),
-#     access_level: int = Form(...),   # 1 или 2
-#     duration_months: int = Form(...), # 1 или 12
-#     _=Depends(verify_csrf),
-# ):
-#     if not current_superuser:
-#         raise HTTPException(status_code=401)
-#
-#     if access_level not in (1, 2):
-#         return JSONResponse(
-#             status_code=400,
-#             content={"success": False, "message": "Некорректный уровень доступа"}
-#         )
-#
-#     if duration_months not in (1, 12):
-#         return JSONResponse(
-#             status_code=400,
-#             content={"success": False, "message": "Некорректный срок"}
-#         )
-#
-#     now = datetime.now(timezone.utc)
-#     duration = timedelta(days=30 * duration_months)
-#
-#     # Получаем текущий доступ пользователя
-#     current = await pool.fetchrow(
-#         "SELECT access_level, access_until FROM users WHERE id = $1", user_id
-#     )
-#     if not current:
-#         return JSONResponse(
-#             status_code=404,
-#             content={"success": False, "message": "Пользователь не найден"}
-#         )
-#
-#     current_level = current["access_level"] or 0
-#     current_until = current["access_until"]
-#
-#     # === ПРОВЕРКИ ===
-#     if current_level != 0 and current_level != access_level:
-#         return JSONResponse(
-#             status_code=400,
-#             content={
-#                 "success": False,
-#                 "message": "У пользователя уже есть другой уровень доступа. "
-#                            "Используйте страницу «Изменение доступа»."
-#             }
-#         )
-#
-#     # === Расчёт новой даты ===
-#     if current_level == 0 or (current_until and current_until < now):
-#         # Нет доступа или подписка истекла
-#         new_until = now + duration
-#     else:
-#         # Есть активный доступ того же уровня — продлеваем
-#         new_until = current_until + duration
-#
-#     # Обновляем пользователя
-#     await pool.execute("""
-#         UPDATE users
-#         SET access_level = $1, access_until = $2
-#         WHERE id = $3
-#     """, access_level, new_until, user_id)
-#
-#     # Записываем в историю
-#     await pool.execute("""
-#         INSERT INTO user_access_history
-#             (user_id, old_access_level, old_access_until, new_access_level, new_access_until, reason, note)
-#         VALUES ($1, $2, $3, $4, $5, 'gift', 'Подарок доступа от администратора')
-#     """, user_id, current_level, current_until, access_level, new_until)
-#
-#     return {
-#         "success": True,
-#         "message": f"Доступ успешно подарен (уровень {access_level}, срок {duration_months} мес.)"
-#     }
 
 
 # ==================== РУЧНАЯ ОПЛАТА ЗАКАЗОВ ====================
@@ -1187,6 +1108,12 @@ async def admin_feedback_update(
     except (TypeError, ValueError):
         quality = 0
 
+    # Запоминаем предыдущее значение качества, чтобы начислить баллы только один раз
+    prev = await pool.fetchrow(
+        "SELECT user_id, question_quality FROM feedback WHERE id = $1",
+        feedback_id,
+    )
+
     result = await pool.execute(
         """
         UPDATE feedback
@@ -1209,6 +1136,10 @@ async def admin_feedback_update(
         _feedback_as_bool(is_resolved),
         feedback_id,
     )
+
+    # Начисляем 100 баллов, если отзыв впервые помечен как полезный
+    if prev and quality == 1 and (prev["question_quality"] or 0) != 1:
+        await award_useful_feedback(pool, prev["user_id"])
 
     ok = "updated" if result != "UPDATE 0" else None
     error = None if ok else "not_found"

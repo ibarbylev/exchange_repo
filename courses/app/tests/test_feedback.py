@@ -385,6 +385,19 @@ async def test_admin_feedback_update_success(admin_client, access_user, db_pool)
     assert row["is_resolved"] is True
     assert row["answered_at"] is not None
 
+    # Полезный отзыв → начислены 100 баллов
+    points = await db_pool.fetchval(
+        "SELECT loyalty_points FROM users WHERE id = $1", user_id
+    )
+    assert points == 100
+
+    tx = await db_pool.fetchrow(
+        "SELECT points, reason FROM loyalty WHERE user_id = $1", user_id
+    )
+    assert tx is not None
+    assert tx["points"] == 100
+    assert "отзыв" in (tx["reason"] or "").lower()
+
 
 @pytest.mark.asyncio
 async def test_admin_feedback_update_empty_fields(admin_client, access_user, db_pool):
