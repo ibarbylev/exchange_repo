@@ -22,6 +22,7 @@ from app.repositories.user import (
     delete_expired_unconfirmed_users,
     can_send_verification_email
 )
+from app.repositories.loyalty import award_welcome
 from app.routers.deps import LangDep, render_template
 
 router = APIRouter(tags=["auth"])
@@ -252,6 +253,9 @@ async def register_post(
         query, username, email, hashed_password, first_name, last_name
     )
 
+    # Приветственные баллы лояльности
+    await award_welcome(pool, new_user["id"])
+
     # Отправляем письмо подтверждения
     token = create_email_verification_token(email)
     await send_verification_email(
@@ -480,4 +484,3 @@ async def resend_verification_post(
         lang_pair=lang_pair,
         context={"email": email}
     )
-

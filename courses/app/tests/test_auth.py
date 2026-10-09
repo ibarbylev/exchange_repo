@@ -7,13 +7,32 @@ from .conftest import post_form
 
 # --- registration -------------------------------------------------
 @pytest.mark.asyncio
-async def test_register_new_user(client: AsyncClient, user_data):
-    """Регистрация нового пользователя"""
+async def test_register_new_user(client: AsyncClient, db_pool, user_data):
+    """Регистрация нового пользователя + начисление 1000 приветственных баллов"""
     data = user_data()
     response = await post_form(client, "/bg/ru/auth/register/", data=data)
 
     assert response.status_code == 200
     assert "Проверьте почту" in response.text or "успешно" in response.text.lower()
+
+    # Пользователь должен появиться в БД
+    user = await db_pool.fetchrow(
+        "SELECT id, loyalty_points FROM users WHERE LOWER(email) = LOWER($1)",
+        data["email"],
+    )
+    assert user is not None
+
+    # Приветственные баллы начислены
+    assert user["loyalty_points"] == 1000
+
+    # Запись в истории лояльности
+    tx = await db_pool.fetchrow(
+        "SELECT points, reason FROM loyalty WHERE user_id = $1",
+        user["id"],
+    )
+    assert tx is not None
+    assert tx["points"] == 1000
+    assert "Приветственные" in (tx["reason"] or "")
 
 
 @pytest.mark.asyncio
