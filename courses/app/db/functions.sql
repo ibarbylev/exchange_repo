@@ -338,3 +338,56 @@ SELECT CASE
     )
 END;
 $$;
+
+
+--------------------------------------------------------------------------------
+-- 7. Функция добавления строк с таблицу лояльности loyalty
+-- проверяет, чтобы баланс баллов для пользователя не стал отрицательным
+-- Добавлены собственные исключения:
+-- 'P0001'- пользователь не найден
+-- 'P0002'-  недостаточно баллов
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION add_loyalty(
+    p_user_id INTEGER,
+    p_points INTEGER,
+    p_reason TEXT DEFAULT NULL
+)
+RETURNS loyalty
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_balance INTEGER;
+    v_loyalty loyalty;
+BEGIN
+    -- Блокируем пользователя до конца транзакции
+    PERFORM 1
+    FROM users
+    WHERE id = p_user_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'User not found'
+            USING ERRCODE = 'P0001';   -- пользователь не найден
+    END IF;
+
+    -- Текущий баланс
+    SELECT COALESCE(SUM(points), 0)
+    INTO v_balance
+    FROM loyalty
+    WHERE user_id = p_user_id;
+
+    -- Запрет отрицательного баланса
+    IF v_balance + p_points < 0 THEN
+        RAISE EXCEPTION 'Insufficient points'
+            USING ERRCODE = 'P0002';   -- недостаточно баллов
+    END IF;
+
+    -- Вставка операции
+    INSERT INTO loyalty (user_id, points, reason)
+    VALUES (p_user_id, p_points, p_reason)
+    RETURNING *
+    INTO v_loyalty;
+
+    RETURN v_loyalty;
+END;
+$$;
