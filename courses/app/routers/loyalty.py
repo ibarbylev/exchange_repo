@@ -50,7 +50,7 @@ async def loyalty_page(
         {
             "points": points,
             "transactions": transactions,
-            "freeze_days": 1 if has_freeze else 0,
+            "has_freeze": has_freeze,
         },
     )
 
