@@ -347,7 +347,7 @@ $$;
 -- 'P0001'- пользователь не найден
 -- 'P0002'-  недостаточно баллов
 --------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION add_loyalty(
+CREATE OR REPLACE FUNCTION insert_into_loyalty(
     p_user_id INTEGER,
     p_points INTEGER,
     p_reason TEXT DEFAULT NULL
@@ -367,7 +367,7 @@ BEGIN
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'User not found'
-            USING ERRCODE = 'P0001';   -- пользователь не найден
+            USING ERRCODE = 'P0001';
     END IF;
 
     -- Текущий баланс
@@ -379,7 +379,7 @@ BEGIN
     -- Запрет отрицательного баланса
     IF v_balance + p_points < 0 THEN
         RAISE EXCEPTION 'Insufficient points'
-            USING ERRCODE = 'P0002';   -- недостаточно баллов
+            USING ERRCODE = 'P0002';
     END IF;
 
     -- Вставка операции
@@ -387,6 +387,12 @@ BEGIN
     VALUES (p_user_id, p_points, p_reason)
     RETURNING *
     INTO v_loyalty;
+
+    -- Обновляем денормализованный баланс в users
+    -- (чтобы не гонять пересчёт баллов при каждом получении CurrentUser)
+    UPDATE users
+    SET loyalty_points = loyalty_points + p_points
+    WHERE id = p_user_id;
 
     RETURN v_loyalty;
 END;

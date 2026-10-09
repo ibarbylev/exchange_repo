@@ -37,12 +37,18 @@ CREATE TABLE IF NOT EXISTS users (
                     -- и только если дневная активность ещё не была. Открытие страницы номер не выдаёт.
                     -- После прохождения этого Q POST стирает номер, двигает last_on и streak.
                     -- Устаревшая дата и пустой номер — сигнал эндпойнту ссылки выбрать новое Q.
+    loyalty_points      INTEGER NOT NULL DEFAULT 0,
+                    -- Денормализуем таблицу и вводим поле суммы, чтобы не гонять пересчёт суммы
+                    -- при каждом запросе CurrentUser.
+                    -- Пересчёт и изменения суммы баллов производит функция insert_into_loyalty()
+                    -- Теперь одним запросом к users мы получаем всю информацию о пользователе.
 
     is_active           BOOLEAN DEFAULT true NOT NULL,
     is_superuser        BOOLEAN DEFAULT false NOT NULL,
     is_staff            BOOLEAN DEFAULT false NOT NULL,
     is_confirmed        BOOLEAN NOT NULL DEFAULT false,
     is_loyalty          BOOLEAN NOT NULL DEFAULT false,
+    has_freeze          BOOLEAN NOT NULL DEFAULT false,     -- день заморозки daily_activity
 
     -- Поля для политики одного устройства
     current_jti             VARCHAR(255),
