@@ -1,22 +1,24 @@
 {% extends "base_page.html" %}
 
-{% block title %}Программа лояльности{% endblock %}
+{% block title %}Программа лояльности+++{% endblock %}
 
-{% block content %}
-**********
-<br>
-==============
+{% block container %}
 <div class="container" style="padding: 40px 15px; max-width: 1100px;">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="mb-0">
-            У Вас <i class="fa-solid fa-gem" style="color: #a855f7;"></i>
-            <strong style="color: #a855f7;">{{ points|default(0) }}</strong> баллов
-        </h2>
-        <a href="{{ url_for_sheared_assets('classroom', source_lang=source_lang, ui_lang=ui_lang) }}" class="btn btn-primary">
-            Продолжить обучение
-        </a>
+    <div class="row align-items-center mb-4">
+        <div class="col-12 col-lg-6">
+            <h2 class="mb-2 mb-md-0">
+                У Вас <i class="fa-solid fa-trophy" style="color: #86bc42;"></i>
+                <strong style="color: #86bc42;">{{ points|default(0) }}</strong> баллов
+            </h2>
+        </div>
+        <div class="col-12 col-lg-6 text-md-center">
+            <a href="{{ url_for_sheared_assets('classroom', source_lang=source_lang, ui_lang=ui_lang) }}"
+               class="btn button-in-table-green add-to-cart-btn"
+               style="max-width: 250px;">
+                Продолжить обучение
+            </a>
+        </div>
     </div>
-
     <!-- Вкладки Bootstrap 4 -->
     <ul class="nav nav-tabs mb-4" id="loyaltyTabs" role="tablist">
         <li class="nav-item">
@@ -34,7 +36,7 @@
     <div class="tab-content" id="loyaltyTabContent">
         <!-- Магазин: только заморозка серии -->
         <div class="tab-pane fade show active" id="shop" role="tabpanel" aria-labelledby="shop-tab">
-            <h4 class="mb-3">Улучшения обучения</h4>
+            <h4 class="mb-3">Сохранить непрерывную дневную активность</h4>
             <div class="row">
                 <div class="col-md-6 col-lg-4 mb-3">
                     <div class="card h-100 shadow-sm">
@@ -48,13 +50,13 @@
                             <p class="card-text flex-grow-1 mt-2">Пропустите день без потери серии занятий.</p>
                             <div class="d-flex justify-content-between align-items-center mt-3">
                                 <span class="font-weight-bold">
-                                    <i class="fa-solid fa-gem" style="color: #a855f7;"></i> 25
+                                    <i class="fa-solid fa-trophy" style="color: #86bc42;"></i> 25
                                 </span>
                                 {% if request.state.is_authenticated %}
                                     {% if points >= 25 %}
                                     <form method="post" action="/{{ source_lang }}/{{ ui_lang }}/loyalty/buy-freeze/" class="d-inline">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                        <button type="submit" class="btn btn-outline-primary btn-sm">Купить</button>
+                                        <button type="submit" class="btn button-in-table-green add-to-cart-btn">Купить</button>
                                     </form>
                                     {% else %}
                                     <button class="btn btn-outline-secondary btn-sm" disabled>Недостаточно баллов</button>
@@ -78,7 +80,7 @@
                         {% for tx in transactions %}
                         <div class="list-group-item d-flex justify-content-between align-items-center">
                             <div>
-                                <i class="fa-solid fa-gem" style="color: #a855f7;"></i>
+                                <i class="fa-solid fa-trophy" style="color: #86bc42;"></i>
                                 <span class="{% if tx.points > 0 %}text-success{% else %}text-danger{% endif %} font-weight-bold">
                                     {{ '+' if tx.points > 0 else '' }}{{ tx.points }}
                                 </span>
@@ -89,7 +91,7 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <p class="text-muted">Пока нет транзакций.</p>
+                    <p class="text-muted">У Вас пока ещё нет транзакций.</p>
                     {% endif %}
                 </div>
                 <div class="col-lg-4">
@@ -97,12 +99,10 @@
                         <div class="card-body">
                             <h5 class="card-title">Как заработать баллы?</h5>
                             <ul class="list-unstyled">
-                                <li class="mb-2"><i class="fa-solid fa-gem" style="color: #a855f7;"></i> <strong>1+</strong>: Решить задание дня</li>
-                                <li class="mb-2"><i class="fa-solid fa-gem" style="color: #a855f7;"></i> <strong>5</strong>: Завершить тему</li>
-                                <li class="mb-2"><i class="fa-solid fa-gem" style="color: #a855f7;"></i> <strong>10</strong>: Повторить изученное</li>
-                                <li class="mb-2"><i class="fa-solid fa-gem" style="color: #a855f7;"></i> <strong>15</strong>: Завершить этап проекта</li>
-                                <li class="mb-2"><i class="fa-solid fa-gem" style="color: #a855f7;"></i> <strong>25</strong>: Персонализировать план обучения</li>
-                                <li class="mb-2"><i class="fa-solid fa-gem" style="color: #a855f7;"></i> <strong>25</strong>: Завершить проект</li>
+                                <li class="mb-2"><i class="fa-solid fa-trophy" style="color: #86bc42;"></i> <strong>1 +</strong>: Решить задание дня</li>
+                                <li class="mb-2"><i class="fa-solid fa-trophy" style="color: #86bc42;"></i> <strong>100</strong>: Помощью в улучшении работы сайта</li>
+                                <li class="mb-2"><i class="fa-solid fa-trophy" style="color: #86bc42;"></i> <strong>1000 + </strong>: Кэшбэк от покупки</li>
+                                <li class="mb-2"><i class="fa-solid fa-trophy" style="color: #86bc42;"></i> <strong>1000</strong>: Приветственные баллы</li>
                             </ul>
                         </div>
                     </div>
@@ -117,4 +117,4 @@
     </div>
     {% endif %}
 </div>
-{% endblock %}
+{% endblock container %}
