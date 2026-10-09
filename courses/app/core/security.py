@@ -74,10 +74,6 @@ def streak_view(daily_activity: dict) -> dict:
         streak = int(raw.get("streak") or 0)
     except (TypeError, ValueError):
         streak = 0
-    try:
-        freeze_days = int(raw.get("freeze") or 0)
-    except (TypeError, ValueError):
-        freeze_days = 0
     last_on = raw.get("last_on") or ""
     activity_day = (datetime.now() - timedelta(hours=7)).date()
     last_date = None
@@ -110,7 +106,6 @@ def streak_view(daily_activity: dict) -> dict:
     return {
         "streak_days": streak,
         "active_today": active_today,
-        "freeze_days": freeze_days,
         "marks": marks,
     }
 
