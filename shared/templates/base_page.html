@@ -111,7 +111,7 @@
                                         {% set streak_days = streak_view.streak_days if streak_view.streak_days is defined else (daily.streak|default(0)) %}
                                         {% set streak_days = streak_days|int %}
                                         {% set active_today = streak_view.active_today if streak_view.active_today is defined else false %}
-                                        {% set freeze_days = streak_view.freeze_days if streak_view.freeze_days is defined else (daily.freeze|default(0)|int) %}
+                                        {% set has_freeze = streak_user.has_freeze if streak_user and streak_user.has_freeze else false %}
                                         {% set streak_marks = streak_view.marks if streak_view.marks is defined else [] %}
                                         {% set n10 = streak_days % 10 %}
                                         {% set n100 = streak_days % 100 %}
@@ -146,7 +146,7 @@
                                                 <div class="streak-marks" id="streakMarks" data-streak="{{ streak_days }}" data-last-on="{{ daily.last_on|default('') }}"></div>
                                                 {% endif %}
                                                 <p class="streak-freeze">
-                                                    {% if freeze_days > 0 %}
+                                                    {% if has_freeze %}
                                                     У Вас есть заморозка серии на 1 день.
                                                     {% else %}
                                                     Заморозка серии на 1 день пока недоступна. Позже её можно будет получить за баллы лояльности.
