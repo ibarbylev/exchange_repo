@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 
 from app.core.config import settings
 from app.repositories.user import get_current_user_session
+from app.repositories.daily_activity import apply_pending_freeze
 
 pwd_context = CryptContext(
     schemes=["argon2", "django_pbkdf2_sha256", "pbkdf2_sha256", "bcrypt"],   # поддерживает все 3 формата
@@ -68,7 +69,9 @@ async def check_password_for_email(pool, email: str, password: str) -> bool:
 
 
 def streak_view(daily_activity: dict) -> dict:
-    """Поля индикатора серии. Новый день — с 07:00 времени сервера, как в daily_activity."""
+    """Поля индикатора серии. Новый день — с 07:00 времени сервера, как в daily_activity.
+    Всегда показывает последние 7 календарных дней, заканчивая сегодня.
+    """
     raw = daily_activity or {}
     try:
         streak = int(raw.get("streak") or 0)
@@ -82,27 +85,26 @@ def streak_view(daily_activity: dict) -> dict:
             last_date = datetime.strptime(str(last_on)[:10], "%Y-%m-%d").date()
         except ValueError:
             last_date = None
+
     weekdays = ("пн", "вт", "ср", "чт", "пт", "сб", "вс")
-    show = min(max(streak, 0), 7)
     marks = []
-    if last_date and show:
-        start = last_date - timedelta(days=show - 1)
-        for offset in range(show):
-            day = start + timedelta(days=offset)
-            marks.append({
-                "label": weekdays[day.weekday()],
-                "is_today": day == activity_day,
-                "done": True,
-            })
-    active_today = last_date == activity_day if last_date else False
-    if not active_today:
-        if len(marks) >= 7:
-            marks = marks[-6:]
+    # Последние 7 дней, заканчивая сегодня
+    start = activity_day - timedelta(days=6)
+    for offset in range(7):
+        day = start + timedelta(days=offset)
+        is_today = day == activity_day
+        # День засчитан, если он не позже last_on (и last_on есть)
+        done = bool(last_date and day <= last_date)
+        # Сегодня — pending, даже если last_on == today (но тогда active_today=True и done=True)
+        if is_today and last_date != activity_day:
+            done = False
         marks.append({
-            "label": weekdays[activity_day.weekday()],
-            "is_today": True,
-            "done": False,
+            "label": weekdays[day.weekday()],
+            "is_today": is_today,
+            "done": done,
         })
+
+    active_today = last_date == activity_day if last_date else False
     return {
         "streak_days": streak,
         "active_today": active_today,
@@ -169,6 +171,11 @@ async def get_current_user(token: str, pool):
             daily_activity = _as_daily_activity(row["daily_activity"] if row else None)
             loyalty_points = int(row["loyalty_points"] or 0) if row else 0
             has_freeze = bool(row["has_freeze"]) if row else False
+
+            # Применяем заморозку, если пропущен ровно один день
+            daily_activity, has_freeze = await apply_pending_freeze(
+                pool, user_id, daily_activity, has_freeze
+            )
 
         return {
             "user_id": user_id,

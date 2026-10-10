@@ -3,6 +3,68 @@ from asyncpg import Pool
 from typing import Any
 from .loyalty import award_daily_task
 
+# =============================================================================
+# Дневная активность и стрик (серия занятий)
+# =============================================================================
+#
+# Календарный день активности начинается в 07:00 времени сервера
+# (см. activity_day). Всё ниже считается относительно этого дня.
+#
+# Состояние хранится в users.daily_activity (JSONB):
+#   {
+#     "streak": 4,                  # текущая длина серии
+#     "last_on": "2026-10-09",      # последний день, за который активность засчитана
+#     "exercise_current": "..."     # (опционально) Q, назначенное как дневное задание
+#   }
+# Флаг users.has_freeze — куплена ли 1-дневная заморозка серии.
+#
+# -----------------------------------------------------------------------------
+# Когда засчитывается день
+# -----------------------------------------------------------------------------
+# 1. Обычное прохождение темы / Text Intensive / упражнение
+#    (record_daily_activity, вызывается из classroom.py):
+#    - если сегодня ещё не было — обновляет last_on и streak;
+#    - баллы лояльности НЕ начисляет.
+#
+# 2. Выполнение специального дневного задания (Q)
+#    (complete_daily_task_if_matches):
+#    - то же обновление стрика + начисление 1–5 баллов (award_daily_task).
+#
+# Повторное действие в тот же день ничего не меняет.
+#
+# -----------------------------------------------------------------------------
+# Правила изменения стрика (_update_streak)
+# -----------------------------------------------------------------------------
+# Пусть days_diff = сегодня − last_on.
+#
+# - days_diff == 1          → streak += 1          (обычный следующий день)
+# - days_diff == 2          → пропуск ровно одного дня:
+#     * есть заморозка      → streak += 2 (покрытый день + сегодня), заморозка списывается
+#     * нет заморозки       → streak = 1
+# - days_diff >= 3          → streak = 1           (заморозка НЕ используется)
+# - нет last_on             → streak = 1
+#
+# -----------------------------------------------------------------------------
+# Автоматическое применение заморозки (apply_pending_freeze)
+# -----------------------------------------------------------------------------
+# Вызывается при загрузке пользователя (get_current_user), т.е. при открытии
+# любой страницы. Если пропущен ровно один день и has_freeze = true:
+#   - last_on сдвигается на пропущенный день,
+#   - streak увеличивается на 1 (пропущенный день засчитывается),
+#   - has_freeze становится false.
+# Это позволяет серии «держаться» ещё до того, как пользователь выполнит
+# задание или пройдёт тему сегодня.
+#
+# -----------------------------------------------------------------------------
+# Дневное задание (lazy Q)
+# -----------------------------------------------------------------------------
+# assign_or_get_daily_exercise выбирает случайное Q из актуального курса
+# (по самому свежему курсору прогресса) и записывает его в exercise_current,
+# если день ещё не засчитан. После успешного прохождения complete_daily_task_
+# if_matches стирает exercise_current, двигает стрик и начисляет баллы.
+#
+# =============================================================================
+
 # ---------------------------------------------------------------------------
 # Дневное задание (lazy Q)
 # ---------------------------------------------------------------------------
@@ -185,7 +247,7 @@ async def _update_streak(pool: Pool, user_id: int, daily: dict, today: str) -> d
 
     Правила:
     - разница 1 день → streak += 1
-    - разница 2 дня и есть заморозка → streak += 1, заморозка используется
+    - разница 2 дня и есть заморозка → streak += 2 (покрытый + сегодня), заморозка используется
     - разница 2 дня без заморозки → streak = 1
     - разница > 2 дней (даже с заморозкой) → streak = 1, заморозка НЕ используется
     - нет last_on → streak = 1
@@ -210,7 +272,8 @@ async def _update_streak(pool: Pool, user_id: int, daily: dict, today: str) -> d
             elif days_diff == 2:
                 # Пропуск ровно одного дня
                 if await _has_freeze(pool, user_id):
-                    streak += 1
+                    # Покрытый день + сегодняшний день
+                    streak += 2
                     used_freeze = True
                 else:
                     streak = 1
@@ -228,6 +291,63 @@ async def _update_streak(pool: Pool, user_id: int, daily: dict, today: str) -> d
     daily["streak"] = streak
     daily["last_on"] = today
     return daily
+
+
+async def apply_pending_freeze(pool: Pool, user_id: int, daily: dict, has_freeze: bool) -> tuple[dict, bool]:
+    """
+    Если пропущен ровно один день и есть заморозка — применяет её сразу
+    (при открытии страницы / загрузке пользователя).
+    last_on сдвигается на пропущенный день, streak увеличивается на 1,
+    заморозка списывается.
+    Возвращает (обновлённый daily, новый has_freeze).
+    """
+    if not has_freeze or not daily:
+        return daily, has_freeze
+
+    last_on = str(daily.get("last_on") or "")[:10]
+    if not last_on:
+        return daily, has_freeze
+
+    try:
+        from datetime import date
+        last_date = date.fromisoformat(last_on)
+    except ValueError:
+        return daily, has_freeze
+
+    today = activity_day()
+    try:
+        today_date = date.fromisoformat(today)
+        days_diff = (today_date - last_date).days
+    except ValueError:
+        return daily, has_freeze
+
+    # Только ровно один пропущенный день (разница 2)
+    if days_diff != 2:
+        return daily, has_freeze
+
+    # Покрываем пропущенный день — он засчитывается в серию
+    covered = last_date + timedelta(days=1)
+    daily = dict(daily)  # копия
+    try:
+        streak = int(daily.get("streak") or 0)
+    except (TypeError, ValueError):
+        streak = 0
+    daily["streak"] = streak + 1
+    daily["last_on"] = covered.isoformat()
+
+    import json
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            UPDATE users
+            SET daily_activity = $1::jsonb,
+                has_freeze = false
+            WHERE id = $2
+            """,
+            json.dumps(daily, ensure_ascii=False),
+            user_id,
+        )
+    return daily, False
 
 
 async def record_daily_activity(pool: Pool, user_id: int) -> dict[str, Any] | None:

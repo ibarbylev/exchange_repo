@@ -198,11 +198,11 @@ async def test_freeze_covers_one_day_skip(db_pool, create_user):
         result = await record_daily_activity(db_pool, user_id)
 
     assert result is not None
-    assert result["streak"] == 6
+    assert result["streak"] == 7  # 5 + покрытый день + сегодня
     assert result["last_on"] == today
 
     daily = await _get_daily(db_pool, user_id)
-    assert daily["streak"] == 6
+    assert daily["streak"] == 7
     assert daily["last_on"] == today
 
     has_freeze = await db_pool.fetchval(
@@ -321,7 +321,7 @@ async def test_freeze_used_then_next_skip_resets(db_pool, create_user):
         await record_daily_activity(db_pool, user_id)
 
     daily = await _get_daily(db_pool, user_id)
-    assert daily["streak"] == 4
+    assert daily["streak"] == 5  # 3 + покрытый день + сегодня
     has_freeze = await db_pool.fetchval("SELECT has_freeze FROM users WHERE id = $1", user_id)
     assert has_freeze is False
 
@@ -345,3 +345,112 @@ async def test_no_points_awarded_for_regular_activity(db_pool, create_user):
 
     balance_after = await get_loyalty_balance(db_pool, user_id)
     assert balance_after == balance_before
+
+
+# ---------------------------------------------------------------------------
+# apply_pending_freeze (применяется при загрузке пользователя / обновлении страницы)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_apply_pending_freeze_covers_one_day_gap(db_pool, create_user):
+    """
+    При открытии страницы, если пропущен ровно один день и есть заморозка,
+    last_on сдвигается на пропущенный день, стрик увеличивается на 1,
+    заморозка списывается.
+    """
+    from app.repositories.daily_activity import apply_pending_freeze
+
+    user_id = await create_user()
+    await _set_daily(db_pool, user_id, streak=1907, last_on="2026-10-08", has_freeze=True)
+
+    daily = await _get_daily(db_pool, user_id)
+    with patch("app.repositories.daily_activity.activity_day", return_value="2026-10-10"):
+        new_daily, new_has_freeze = await apply_pending_freeze(
+            db_pool, user_id, daily, True
+        )
+
+    assert new_has_freeze is False
+    assert new_daily["last_on"] == "2026-10-09"  # покрыта пятница
+    assert new_daily["streak"] == 1908  # пятница засчитана
+
+    # Проверяем, что изменения записаны в БД
+    db_daily = await _get_daily(db_pool, user_id)
+    assert db_daily["last_on"] == "2026-10-09"
+    assert db_daily["streak"] == 1908
+    has_freeze = await db_pool.fetchval(
+        "SELECT has_freeze FROM users WHERE id = $1", user_id
+    )
+    assert has_freeze is False
+
+
+@pytest.mark.asyncio
+async def test_apply_pending_freeze_does_not_cover_two_day_gap(db_pool, create_user):
+    """Пропуск двух и более дней — заморозка не применяется, состояние не меняется."""
+    from app.repositories.daily_activity import apply_pending_freeze
+
+    user_id = await create_user()
+    await _set_daily(db_pool, user_id, streak=10, last_on="2026-10-07", has_freeze=True)
+
+    daily = await _get_daily(db_pool, user_id)
+    with patch("app.repositories.daily_activity.activity_day", return_value="2026-10-10"):
+        new_daily, new_has_freeze = await apply_pending_freeze(
+            db_pool, user_id, daily, True
+        )
+
+    assert new_has_freeze is True
+    assert new_daily["last_on"] == "2026-10-07"
+    assert new_daily["streak"] == 10
+
+    has_freeze = await db_pool.fetchval(
+        "SELECT has_freeze FROM users WHERE id = $1", user_id
+    )
+    assert has_freeze is True
+
+
+@pytest.mark.asyncio
+async def test_apply_pending_freeze_no_freeze_does_nothing(db_pool, create_user):
+    """Без заморозки функция ничего не меняет, даже при пропуске одного дня."""
+    from app.repositories.daily_activity import apply_pending_freeze
+
+    user_id = await create_user()
+    await _set_daily(db_pool, user_id, streak=5, last_on="2026-10-08", has_freeze=False)
+
+    daily = await _get_daily(db_pool, user_id)
+    with patch("app.repositories.daily_activity.activity_day", return_value="2026-10-10"):
+        new_daily, new_has_freeze = await apply_pending_freeze(
+            db_pool, user_id, daily, False
+        )
+
+    assert new_has_freeze is False
+    assert new_daily["last_on"] == "2026-10-08"
+    assert new_daily["streak"] == 5
+
+
+@pytest.mark.asyncio
+async def test_streak_view_shows_last_7_days_ending_today(db_pool, create_user):
+    """
+    streak_view всегда строит метки последних 7 календарных дней, заканчивая сегодня.
+    Дни ≤ last_on помечаются как выполненные.
+    """
+    from app.core.security import streak_view
+    from app.repositories.daily_activity import apply_pending_freeze
+
+    # Фиксируем "сегодня" через мок внутри функции сложно, поэтому проверяем структуру
+    # на реальных данных после apply_pending_freeze
+    user_id = await create_user()
+    await _set_daily(db_pool, user_id, streak=4, last_on="2026-10-08", has_freeze=True)
+
+    daily = await _get_daily(db_pool, user_id)
+    with patch("app.repositories.daily_activity.activity_day", return_value="2026-10-10"):
+        daily, _ = await apply_pending_freeze(db_pool, user_id, daily, True)
+
+    view = streak_view(daily)
+    assert view["streak_days"] == 5  # 4 + покрытый день
+    assert view["active_today"] is False
+    assert len(view["marks"]) == 7
+    # Последняя метка — сегодня
+    assert view["marks"][-1]["is_today"] is True
+    assert view["marks"][-1]["done"] is False
+    # День last_on (после freeze — 2026-10-09) должен быть done
+    done_count = sum(1 for m in view["marks"] if m["done"])
+    assert done_count >= 1
