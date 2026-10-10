@@ -282,7 +282,7 @@ async def test_daily_task_assigns_q_from_freshest_course(db_pool, create_user, m
     При отсутствии exercise_current выбирается случайное Q из курса
     самого свежего прогресса и пишется в daily_activity.
     """
-    from app.repositories.loyalty import assign_or_get_daily_exercise
+    from app.repositories.daily_activity import assign_or_get_daily_exercise
     import json
 
     user_id = await create_user()
@@ -325,7 +325,7 @@ async def test_daily_task_assigns_q_from_freshest_course(db_pool, create_user, m
 @pytest.mark.asyncio
 async def test_daily_task_complete_awards_and_updates_streak(db_pool, create_user, minimal_theme):
     """Завершение назначенного Q начисляет баллы и двигает стрик."""
-    from app.repositories.loyalty import (
+    from app.repositories.daily_activity import (
         assign_or_get_daily_exercise,
         complete_daily_task_if_matches,
     )
