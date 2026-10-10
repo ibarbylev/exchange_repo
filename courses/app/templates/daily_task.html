@@ -114,15 +114,34 @@
             audio.src = list[i++];
             audio.onended = next;
             var p = audio.play();
-            if (p && p.catch) p.catch(function () { next(); });
+            if (p && p.catch) {
+                p.catch(function (err) {
+                    console.warn("Audio play failed for", audio.src, err);
+                    next();
+                });
+            }
         }
         next();
     }
     function questionAudioUrls() {
-        var urls = ["/media/audio/VyberitePravVariant.mp3"];
+        // Сначала проигрываем вводный файл "Выберите правильный вариант" /
+        // "Выполните упражнения" — точно так же, как в плеере Q страницы VQT.
+        // Затем — озвучку самого задания из папки курса.
+        var urls = [];
+
+        // Вводный файл "Выполните упражнения" / "Выберите правильный вариант".
+        // Сначала пробуем языковой вариант (если есть), затем общий — как в плеере VQT.
+        var lang = "{{ source_lang }}";
+        urls.push("/media/audio/" + lang + "/VyberitePravVariant.mp3");
+        urls.push("/media/audio/VyberitePravVariant.mp3");
+
+        // Если для текущего языка есть отдельный вариант — можно добавить его
+        // (пока используем общий, как в основном плеере)
         parseAudioNames(exercise.audio_question).forEach(function (n) {
-            urls.push(audioUrl(n));
+            var u = audioUrl(n);
+            if (u) urls.push(u);
         });
+
         return urls;
     }
     function answerAudioUrls() {

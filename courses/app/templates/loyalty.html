@@ -116,6 +116,9 @@
     </div>
     {% endif %}
 </div>
+{% endblock container %}
+
+{% block js_scripts %}
 <script>
 $(function () {
     var hash = window.location.hash;
@@ -127,4 +130,4 @@ $(function () {
     }
 });
 </script>
-{% endblock container %}
+{% endblock js_scripts %}
