@@ -660,8 +660,9 @@ async def save_current_exercise(
 
     # Автоматически засчитываем дневную активность при любом прохождении упражнения
     # (первый раз или повтор)
+    daily_result = None
     try:
-        await record_daily_activity(pool, user_id)
+        daily_result = await record_daily_activity(pool, user_id)
     except Exception as e:
         print(f"[BACKEND] Ошибка record_daily_activity: {e}")
 
@@ -685,10 +686,13 @@ async def save_current_exercise(
                     old_name,
                 )
                 if old_pos is not None and new_pos <= old_pos:
-                    return {
+                    resp = {
                         "success": True,
                         "current_exercise": parse_current_exercise_map(entries),
                     }
+                    if daily_result:
+                        resp["daily_activity"] = daily_result
+                    return resp
             entries[prefix] = {"name": exercise_name, "at": server_now_iso()}
             payload = json.dumps(entries, ensure_ascii=False)
             await conn.execute(
@@ -696,7 +700,10 @@ async def save_current_exercise(
                 payload,
                 user_id,
             )
-        return {"success": True, "current_exercise": parse_current_exercise_map(entries)}
+        resp = {"success": True, "current_exercise": parse_current_exercise_map(entries)}
+        if daily_result:
+            resp["daily_activity"] = daily_result
+        return resp
     except Exception as e:
         print(f"[BACKEND] ОШИБКА при UPDATE: {e}")
         return {"success": False, "error": str(e)}
@@ -730,8 +737,9 @@ async def save_exercise_stars(
         return {"success": False, "error": "invalid stars"}
 
     # Автоматически засчитываем дневную активность при прохождении упражнения
+    daily_result = None
     try:
-        await record_daily_activity(pool, user_id)
+        daily_result = await record_daily_activity(pool, user_id)
     except Exception as e:
         print(f"[BACKEND] Ошибка record_daily_activity (stars): {e}")
 
@@ -749,7 +757,10 @@ async def save_exercise_stars(
                 json.dumps(current, ensure_ascii=False),
                 user_id,
             )
-        return {"success": True, "stars": current[exercise_name]}
+        resp = {"success": True, "stars": current[exercise_name]}
+        if daily_result:
+            resp["daily_activity"] = daily_result
+        return resp
     except Exception as e:
         print(f"[BACKEND] ОШИБКА при UPDATE exercise_stars: {e}")
         return {"success": False, "error": str(e)}
@@ -793,8 +804,9 @@ async def save_intensive_progress(
         return {"success": False, "error": "empty exercise"}
 
     # Автоматически засчитываем дневную активность при прохождении (первый раз или повтор)
+    daily_result = None
     try:
-        await record_daily_activity(pool, user_id)
+        daily_result = await record_daily_activity(pool, user_id)
     except Exception as e:
         print(f"[BACKEND] Ошибка record_daily_activity (intensive): {e}")
 
@@ -828,13 +840,16 @@ async def save_intensive_progress(
                     json.dumps(progress, ensure_ascii=False),
                     user_id,
                 )
-            return {
+            resp = {
                 "success": True,
                 "lang_prefix": prefix,
                 "intensive_progress": {
                     prefix: _intensive_cursors(progress, prefix),
                 },
             }
+            if daily_result:
+                resp["daily_activity"] = daily_result
+            return resp
     except Exception as e:
         print(f"[BACKEND] ОШИБКА при UPDATE intensive_progress: {e}")
         return {"success": False, "error": str(e)}

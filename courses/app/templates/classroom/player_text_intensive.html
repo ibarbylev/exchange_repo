@@ -492,6 +492,11 @@ window.TextLab = {
                 (window.Classroom && Classroom.csrf && Classroom.csrf.headers && Classroom.csrf.headers()) || {}
             ),
             body: JSON.stringify({ exercise_name: exerciseId, stars: next })
+        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            if (data && data.daily_activity && window.markDailyActivityDone) {
+                window.markDailyActivityDone(data.daily_activity.streak, data.daily_activity.last_on);
+            }
+            return data;
         }).catch(() => {});
     },
 
@@ -522,6 +527,11 @@ window.TextLab = {
                 block_name: block,
                 lang_prefix: this.langPrefix()
             })
+        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            if (data && data.daily_activity && window.markDailyActivityDone) {
+                window.markDailyActivityDone(data.daily_activity.streak, data.daily_activity.last_on);
+            }
+            return data;
         }).catch(() => {});
     },
 

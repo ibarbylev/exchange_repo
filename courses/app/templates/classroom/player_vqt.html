@@ -169,6 +169,11 @@
                 (window.Classroom && Classroom.csrf && Classroom.csrf.headers && Classroom.csrf.headers()) || {}
             ),
             body: JSON.stringify({ exercise_name: name })
+        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            if (data && data.daily_activity && window.markDailyActivityDone) {
+                window.markDailyActivityDone(data.daily_activity.streak, data.daily_activity.last_on);
+            }
+            return data;
         }).catch(function (err) {
             dbg('current-exercise failed', err);
         });
@@ -184,6 +189,11 @@
                 (window.Classroom && Classroom.csrf && Classroom.csrf.headers && Classroom.csrf.headers()) || {}
             ),
             body: JSON.stringify({ exercise_name: name, stars: stars })
+        }).then(function (r) { return r.ok ? r.json() : null; }).then(function (data) {
+            if (data && data.daily_activity && window.markDailyActivityDone) {
+                window.markDailyActivityDone(data.daily_activity.streak, data.daily_activity.last_on);
+            }
+            return data;
         }).catch(function (err) {
             dbg('exercise-stars failed', err);
         });

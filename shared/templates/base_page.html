@@ -760,6 +760,65 @@
         </script>
 
 
+
+        <script>
+        // Обновление индикатора серии без перезагрузки страницы
+        window.markDailyActivityDone = function(streak, lastOn) {
+            try {
+                var indicator = document.querySelector(".streak-indicator");
+                if (!indicator) return;
+                indicator.classList.add("is-done");
+
+                // Число в шапке
+                var crownLink = indicator.querySelector("a");
+                if (crownLink) {
+                    var icon = crownLink.querySelector("i");
+                    crownLink.innerHTML = "";
+                    if (icon) crownLink.appendChild(icon);
+                    crownLink.appendChild(document.createTextNode(" " + (streak || 0)));
+                }
+
+                // Текст в панели
+                var panel = indicator.querySelector(".streak-panel");
+                if (panel) {
+                    var p = panel.querySelector("p");
+                    if (p && streak > 0) {
+                        p.textContent = "Поздравляем! Сегодняшний день уже засчитан. Занимайтесь каждый день, чтобы серия росла.";
+                    }
+                    var count = panel.querySelector(".streak-count");
+                    if (count) {
+                        var unit = "дней";
+                        var n10 = streak % 10, n100 = streak % 100;
+                        if (n10 === 1 && n100 !== 11) unit = "день";
+                        else if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) unit = "дня";
+                        count.innerHTML = streak + " <span>" + unit + "</span>";
+                    }
+                }
+
+                // Кнопка дневного задания
+                var btn = document.getElementById("streakDailyTask");
+                if (btn && btn.tagName === "A") {
+                    var newBtn = document.createElement("button");
+                    newBtn.type = "button";
+                    newBtn.className = "btn btn-outline-secondary btn-block";
+                    newBtn.disabled = true;
+                    newBtn.id = "streakDailyTask";
+                    newBtn.textContent = "Заданий на сегодня нет";
+                    btn.parentNode.replaceChild(newBtn, btn);
+                }
+
+                // Помечаем сегодняшний день в marks, если они есть
+                var marks = document.getElementById("streakMarks");
+                if (marks) {
+                    var todayMark = marks.querySelector(".streak-mark.is-today");
+                    if (todayMark) todayMark.classList.add("is-done");
+                }
+            } catch (e) {
+                console.warn("markDailyActivityDone failed", e);
+            }
+        };
+        </script>
+
         <script>
             (function () {
                 var root = document.getElementById("streakMarks");
