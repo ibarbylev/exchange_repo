@@ -160,8 +160,36 @@ async def assign_or_get_daily_exercise(pool: Pool, user_id: int) -> str | None:
     return exercise
 
 
-async def _update_streak(daily: dict, today: str) -> dict:
-    """Обновляет streak и last_on в словаре daily. Не трогает exercise_current."""
+async def _has_freeze(pool: Pool, user_id: int) -> bool:
+    """Проверяет, куплена ли заморозка у пользователя."""
+    async with pool.acquire() as conn:
+        val = await conn.fetchval(
+            "SELECT has_freeze FROM users WHERE id = $1",
+            user_id,
+        )
+    return bool(val)
+
+
+async def _consume_freeze(pool: Pool, user_id: int) -> None:
+    """Сбрасывает флаг заморозки после использования."""
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE users SET has_freeze = false WHERE id = $1",
+            user_id,
+        )
+
+
+async def _update_streak(pool: Pool, user_id: int, daily: dict, today: str) -> dict:
+    """Обновляет streak и last_on в словаре daily. Учитывает заморозку.
+    Не трогает exercise_current.
+
+    Правила:
+    - разница 1 день → streak += 1
+    - разница 2 дня и есть заморозка → streak += 1, заморозка используется
+    - разница 2 дня без заморозки → streak = 1
+    - разница > 2 дней (даже с заморозкой) → streak = 1, заморозка НЕ используется
+    - нет last_on → streak = 1
+    """
     try:
         streak = int(daily.get("streak") or 0)
     except (TypeError, ValueError):
@@ -169,18 +197,33 @@ async def _update_streak(daily: dict, today: str) -> dict:
 
     last_on = str(daily.get("last_on") or "")[:10]
     from datetime import date
+    used_freeze = False
+
     if last_on:
         try:
             last_date = date.fromisoformat(last_on)
             today_date = date.fromisoformat(today)
-            if (today_date - last_date).days == 1:
+            days_diff = (today_date - last_date).days
+
+            if days_diff == 1:
                 streak += 1
+            elif days_diff == 2:
+                # Пропуск ровно одного дня
+                if await _has_freeze(pool, user_id):
+                    streak += 1
+                    used_freeze = True
+                else:
+                    streak = 1
             else:
+                # Пропуск 2+ дней или отрицательный/нулевой (кроме уже обработанного today)
                 streak = 1
         except ValueError:
             streak = 1
     else:
         streak = 1
+
+    if used_freeze:
+        await _consume_freeze(pool, user_id)
 
     daily["streak"] = streak
     daily["last_on"] = today
@@ -191,6 +234,7 @@ async def record_daily_activity(pool: Pool, user_id: int) -> dict[str, Any] | No
     """
     Автоматически засчитывает дневную активность при прохождении темы или интерактивного упражнения
     (первый раз или повтор). Обновляет last_on и streak, если ещё не было сегодня.
+    Учитывает заморозку (покрывает ровно один пропущенный день).
     Баллы не начисляет — они только за специальное дневное задание.
     """
     _, _, daily = await _load_user_progress(pool, user_id)
@@ -199,7 +243,7 @@ async def record_daily_activity(pool: Pool, user_id: int) -> dict[str, Any] | No
     if last_on == today:
         return None  # уже засчитано сегодня
 
-    daily = await _update_streak(daily, today)
+    daily = await _update_streak(pool, user_id, daily, today)
 
     import json
     async with pool.acquire() as conn:
@@ -234,8 +278,8 @@ async def complete_daily_task_if_matches(
     # Начисляем
     award = await award_daily_task(pool, user_id)
 
-    # Обновляем стрик
-    daily = await _update_streak(daily, today)
+    # Обновляем стрик (с учётом заморозки)
+    daily = await _update_streak(pool, user_id, daily, today)
     daily["exercise_current"] = None  # стираем
 
     import json

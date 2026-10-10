@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.db.dependencies import DBPoolDep, CurrentUser, RequiredUser
 from app.middleware.csrf import verify_csrf
+from app.repositories.intensive import get_block
 from app.repositories.classroom import (
     get_classroom_tree,
     load_user_json_field,
