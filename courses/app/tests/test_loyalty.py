@@ -288,7 +288,8 @@ async def test_daily_task_assigns_q_from_freshest_course(db_pool, create_user, m
     user_id = await create_user()
     theme = minimal_theme  # BGRUA1001_H001, курс BGRUA1
 
-    # Создаём пару Q-упражнений в этом курсе
+    # Изолируем набор Q курса, чтобы случайный выбор был предсказуем
+    await db_pool.execute("DELETE FROM exercises WHERE name LIKE 'BGRUA1%' AND exercise_type = 'Q'")
     await db_pool.execute("""
         INSERT INTO exercises (name, exercise_type, theme_name, pos, title)
         VALUES
@@ -333,6 +334,8 @@ async def test_daily_task_complete_awards_and_updates_streak(db_pool, create_use
     user_id = await create_user()
     theme = minimal_theme
 
+    # Только это Q в курсе — иначе RANDOM() может вернуть упражнение из другого теста
+    await db_pool.execute("DELETE FROM exercises WHERE name LIKE 'BGRUA1%' AND exercise_type = 'Q'")
     await db_pool.execute("""
         INSERT INTO exercises (name, exercise_type, theme_name, pos, title)
         VALUES ('BGRUA1001_Q010', 'Q', $1, 10010, 'Daily Q')
