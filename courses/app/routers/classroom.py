@@ -26,7 +26,7 @@ from app.repositories.classroom import (
     server_now_iso,
     _series_cursor_value,
 )
-from app.repositories.intensive import get_block
+from app.repositories.loyalty import record_daily_activity
 from app.routers.deps import LangPair, LangDep, render_template, render_template_string
 
 PLAYERS = {
@@ -658,6 +658,13 @@ async def save_current_exercise(
     if not user_id or not exercise_name or not prefix:
         return {"success": False}
 
+    # Автоматически засчитываем дневную активность при любом прохождении упражнения
+    # (первый раз или повтор)
+    try:
+        await record_daily_activity(pool, user_id)
+    except Exception as e:
+        print(f"[BACKEND] Ошибка record_daily_activity: {e}")
+
     try:
         async with pool.acquire() as conn:
             raw = await conn.fetchval(
@@ -721,6 +728,13 @@ async def save_exercise_stars(
     new_stars = _star_value(stars)
     if not exercise_name or new_stars is None:
         return {"success": False, "error": "invalid stars"}
+
+    # Автоматически засчитываем дневную активность при прохождении упражнения
+    try:
+        await record_daily_activity(pool, user_id)
+    except Exception as e:
+        print(f"[BACKEND] Ошибка record_daily_activity (stars): {e}")
+
     try:
         async with pool.acquire() as conn:
             row = await conn.fetchval(
@@ -777,6 +791,13 @@ async def save_intensive_progress(
 
     if not exercise_name or not prefix:
         return {"success": False, "error": "empty exercise"}
+
+    # Автоматически засчитываем дневную активность при прохождении (первый раз или повтор)
+    try:
+        await record_daily_activity(pool, user_id)
+    except Exception as e:
+        print(f"[BACKEND] Ошибка record_daily_activity (intensive): {e}")
+
     try:
         async with pool.acquire() as conn:
             progress = await load_user_json_field(conn, user_id, "intensive_progress")
