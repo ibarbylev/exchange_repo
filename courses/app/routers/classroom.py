@@ -26,7 +26,7 @@ from app.repositories.classroom import (
     server_now_iso,
     _series_cursor_value,
 )
-from app.repositories.loyalty import record_daily_activity
+from app.repositories.daily_activity import record_daily_activity
 from app.routers.deps import LangPair, LangDep, render_template, render_template_string
 
 PLAYERS = {

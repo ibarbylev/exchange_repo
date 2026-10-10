@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from asyncpg import Pool
-
+from typing import Any
 from .loyalty import award_daily_task
 
 # ---------------------------------------------------------------------------
