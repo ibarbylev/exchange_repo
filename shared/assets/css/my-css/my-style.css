@@ -761,7 +761,7 @@ small {
 .streak-panel {
     white-space: normal !important;
     max-width: 340px;
-    min-width: 260px;
+    min-width: 300px;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }

@@ -152,10 +152,17 @@
                                                     Заморозка серии на 1 день пока недоступна. Позже её можно будет получить за баллы лояльности.
                                                     {% endif %}
                                                 </p>
+                                                {% if active_today %}
+                                                <button type="button"
+                                                        class="btn btn-outline-secondary btn-block"
+                                                        disabled
+                                                        id="streakDailyTask">Заданий на сегодня нет</button>
+                                                {% else %}
                                                 <a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/daily-task/"
                                                    class="button-in-table-green align-items-center justify-content-center"
                                                    id="streakDailyTask"
                                                 >Дневное задание</a>
+                                                {% endif %}
                                             </div>
                                             {% else %}
                                             <a href="{{ url_for_sheared_assets('auth_login', source_lang=source_lang, ui_lang=ui_lang) }}"><i class="fa-solid fa-crown"></i> Серия</a>
