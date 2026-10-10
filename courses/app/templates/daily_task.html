@@ -36,28 +36,38 @@
                 <a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/#transactions" class="button-in-table-green" style="width:auto;">К баллам лояльности</a>
             </p>
             {% elif exercise %}
-            <p class="text-center text-muted mb-3">Решите одно упражнение — день будет засчитан.</p>
-
-            <div class="text-center mb-3">
-                <div class="exercise-code">{{ exercise.name }}</div>
-                {% if exercise.title %}
-                <h4 class="mt-2 mb-0">{{ exercise.title }}</h4>
-                {% endif %}
+            <!-- Лобби -->
+            <div id="lobby" class="text-center py-5">
+                <p class="lead mb-4 py-2" style="margin-bottom: 60px;">Выполните упражнение — и дневная активность будет засчитана!</p>
+                <br><br><br>
+                <button type="button" id="startBtn" class="btn button-in-table-green" style="width:auto; padding:12px 32px; font-size:1.1rem;">
+                    Выполнить упражнение
+                </button>
+                <br><br><br>
             </div>
 
-            <div class="card mb-3">
-                <div class="card-body">
-                    <div id="questionContainer" class="question-container mb-4 p-3 border rounded"></div>
-                    <div class="mb-2"><strong>Варианты ответов:</strong></div>
-                    <div id="variantsContainer" class="d-flex flex-wrap mb-3"></div>
-                    <div id="resultMessage" class="mt-3"></div>
+            <!-- Само упражнение (скрыто до клика) -->
+            <div id="exerciseArea" style="display:none;">
+                <div class="text-center mb-3">
+                    <div class="exercise-code">{{ exercise.name }}</div>
+                    {% if exercise.title %}
+                    <h4 class="mt-2 mb-0">{{ exercise.title }}</h4>
+                    {% endif %}
                 </div>
-            </div>
 
-            <p class="text-center">
-                <button type="button" id="replayBtn" class="btn btn-outline-secondary btn-sm mr-2">Повторить озвучку</button>
-                <button type="button" id="resetBtn" class="btn btn-outline-secondary btn-sm">Начать заново</button>
-            </p>
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div id="questionContainer" class="question-container mb-4 p-3 border rounded"></div>
+                        <div class="mb-2"><strong>Варианты ответов:</strong></div>
+                        <div id="variantsContainer" class="d-flex flex-wrap mb-3"></div>
+                        <div id="resultMessage" class="mt-3"></div>
+                    </div>
+                </div>
+
+                <p class="text-center">
+                    <button type="button" id="replayBtn" class="btn btn-outline-secondary btn-sm mr-2">Воспроизвести вопрос ещё раз</button>
+                </p>
+            </div>
             <audio id="dailyTaskAudio" preload="auto"></audio>
             {% else %}
             <div class="alert alert-info text-center">Сегодня дневное задание уже выполнено.</div>
@@ -75,6 +85,10 @@
     var exercise = {{ exercise | tojson }};
     var csrf = "{{ csrf_token }}";
     var completeUrl = "/{{ source_lang }}/{{ ui_lang }}/loyalty/daily-task/complete/";
+
+    var lobby = document.getElementById("lobby");
+    var exerciseArea = document.getElementById("exerciseArea");
+    var startBtn = document.getElementById("startBtn");
 
     var questionEl = document.getElementById("questionContainer");
     var variantsEl = document.getElementById("variantsContainer");
@@ -101,51 +115,37 @@
         });
         return names;
     }
-    function audioUrl(fileName) {
+    function courseAudioUrl(fileName) {
         if (!fileName) return null;
         return "/media/audio/" + courseAudioFolder(exercise.name) + "/" + fileName + ".mp3";
     }
-    function playQueue(urls, onDone) {
+    function playUrlQueue(urls, onDone) {
         var list = (urls || []).filter(Boolean);
         if (!list.length) { if (onDone) onDone(); return; }
-        var i = 0;
+        var player = audio;
+        var index = 0;
         function next() {
-            if (i >= list.length) { audio.onended = null; if (onDone) onDone(); return; }
-            audio.src = list[i++];
-            audio.onended = next;
-            var p = audio.play();
-            if (p && p.catch) {
-                p.catch(function (err) {
-                    console.warn("Audio play failed for", audio.src, err);
-                    next();
-                });
+            if (index >= list.length) {
+                player.onended = null;
+                if (onDone) onDone();
+                return;
             }
+            player.src = list[index++];
+            player.onended = next;
+            var started = player.play();
+            if (started && started.catch) started.catch(function () { next(); });
         }
         next();
     }
     function questionAudioUrls() {
-        // Сначала проигрываем вводный файл "Выберите правильный вариант" /
-        // "Выполните упражнения" — точно так же, как в плеере Q страницы VQT.
-        // Затем — озвучку самого задания из папки курса.
-        var urls = [];
-
-        // Вводный файл "Выполните упражнения" / "Выберите правильный вариант".
-        // Сначала пробуем языковой вариант (если есть), затем общий — как в плеере VQT.
-        var lang = "{{ source_lang }}";
-        urls.push("/media/audio/" + lang + "/VyberitePravVariant.mp3");
-        urls.push("/media/audio/VyberitePravVariant.mp3");
-
-        // Если для текущего языка есть отдельный вариант — можно добавить его
-        // (пока используем общий, как в основном плеере)
+        var urls = ["/media/audio/VyberitePravVariant.mp3"];
         parseAudioNames(exercise.audio_question).forEach(function (n) {
-            var u = audioUrl(n);
-            if (u) urls.push(u);
+            urls.push(courseAudioUrl(n));
         });
-
         return urls;
     }
     function answerAudioUrls() {
-        return parseAudioNames(exercise.audio_answers).map(audioUrl);
+        return parseAudioNames(exercise.audio_answers).map(courseAudioUrl);
     }
 
     function render() {
@@ -158,7 +158,7 @@
         highlight();
         renderVariants();
         resultEl.innerHTML = "";
-        playQueue(questionAudioUrls());
+        playUrlQueue(questionAudioUrls());
     }
 
     function currentSlot() {
@@ -217,7 +217,7 @@
         filled[idx] = val;
         highlight();
         if (filled.every(function (v) { return v !== null; })) {
-            playQueue(answerAudioUrls(), onSuccess);
+            playUrlQueue(answerAudioUrls(), onSuccess);
         } else {
             renderVariants();
         }
@@ -249,9 +249,13 @@
         });
     }
 
+    startBtn.addEventListener("click", function () {
+        lobby.style.display = "none";
+        exerciseArea.style.display = "";
+        render();   // теперь клик уже был — звук разрешён
+    });
     resetBtn.addEventListener("click", render);
-    replayBtn.addEventListener("click", function () { playQueue(questionAudioUrls()); });
-    render();
+    replayBtn.addEventListener("click", function () { playUrlQueue(questionAudioUrls()); });
 })();
 </script>
 {% endif %}
