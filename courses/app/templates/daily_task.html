@@ -167,11 +167,22 @@
         });
     }
 
+    // answers — список полных комбинаций: [[слот0, слот1, ...], ...]
+    // как correctCombinations в player_vqt
+    function validForSlot(slotIndex) {
+        var set = {};
+        (exercise.answers || []).forEach(function (combo) {
+            if (Array.isArray(combo) && slotIndex < combo.length && combo[slotIndex] != null) {
+                set[combo[slotIndex]] = true;
+            }
+        });
+        return set;
+    }
+
     function choose(idx, val) {
         var slot = slots[idx];
         if (!slot || filled[idx] !== null) return;
-        var correct = (exercise.answers && exercise.answers[idx]) || [];
-        var ok = correct.indexOf(val) !== -1;
+        var ok = !!validForSlot(idx)[val];
 
         slot.textContent = (val === " ") ? " " : val;
         slot.classList.remove("wrong-answer");

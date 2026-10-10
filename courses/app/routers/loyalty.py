@@ -116,12 +116,12 @@ async def buy_freeze(
 
 
 def _parse_groups(raw: str | None) -> list[list[str]]:
-    """Парсит строку вида [a|b][c|d] в список групп."""
+    """Парсит [a|b][c|d]. Для answers каждая группа — полная комбинация слотов."""
     if not raw:
         return []
     groups = []
     for inner in re.findall(r"\[([^\]]*)\]", raw):
-        parts = [p if p else " " for p in inner.split("|")]
+        parts = [(part.strip() or " ") for part in inner.split("|")]
         groups.append(parts)
     return groups
 
