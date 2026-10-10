@@ -286,7 +286,7 @@ async def test_daily_task_assigns_q_from_freshest_course(db_pool, create_user, m
     import json
 
     user_id = await create_user()
-    theme = await minimal_theme  # BGRUA1001_H001, курс BGRUA1
+    theme = minimal_theme  # BGRUA1001_H001, курс BGRUA1
 
     # Создаём пару Q-упражнений в этом курсе
     await db_pool.execute("""
@@ -331,7 +331,7 @@ async def test_daily_task_complete_awards_and_updates_streak(db_pool, create_use
     import json
 
     user_id = await create_user()
-    theme = await minimal_theme
+    theme = minimal_theme
 
     await db_pool.execute("""
         INSERT INTO exercises (name, exercise_type, theme_name, pos, title)

@@ -154,7 +154,8 @@ async def daily_task_page(
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT name, title, question, variants, answers
+                SELECT name, title, question, variants, answers,
+                       audio_question, audio_answers
                 FROM exercises WHERE name = $1
                 """,
                 exercise_name,
@@ -168,6 +169,8 @@ async def daily_task_page(
                 "question": row["question"] or "",
                 "variants": _parse_groups(row["variants"]),
                 "answers": _parse_groups(row["answers"]),
+                "audio_question": row["audio_question"] or "",
+                "audio_answers": row["audio_answers"] or "",
             }
 
     return render_template(request, "daily_task.html", lang_pair, context)

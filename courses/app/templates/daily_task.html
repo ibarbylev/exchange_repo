@@ -3,7 +3,29 @@
 {% block title %}Дневное задание{% endblock %}
 
 {% block container %}
-<div class="container py-4">
+<style>
+    .daily-task .question-container { font-size: 1.35rem; line-height: 2.5; background: #f8f9fa; }
+    .daily-task .answer-slot {
+        display: inline-block; min-width: 120px; min-height: 38px;
+        border: 2px dashed #86bc42; border-radius: 6px; margin: 0 4px;
+        vertical-align: middle; text-align: center; line-height: 34px; background: #fff;
+    }
+    .daily-task .answer-slot.filled {
+        min-width: 0; width: auto; padding: 0 12px; border-style: solid; background: #e8f5e9;
+    }
+    .daily-task .answer-slot.wrong-answer { border-color: #dc3545; background: #fff0f0; }
+    .daily-task .answer-slot.active-slot { outline: 2px solid #86bc42; background: #f4fbe8; }
+    .daily-task .variant-box {
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 8px 14px; border: 2px solid #2d3e50; border-radius: 8px;
+        background: #fff; cursor: pointer; user-select: none; width: fit-content;
+        margin: 3px 4px; font-size: 18px;
+    }
+    .daily-task .variant-box:hover { background: #f0f4ff; border-color: #4a6fa5; }
+    .daily-task .exercise-code { font-family: monospace; color: #6c757d; font-size: 0.95rem; }
+</style>
+
+<div class="container py-4 daily-task">
     <div class="row justify-content-center">
         <div class="col-lg-8">
             <h2 class="text-center mb-3">Дневное задание</h2>
@@ -14,19 +36,29 @@
                 <a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/" class="button-in-table-green" style="width:auto;">К баллам лояльности</a>
             </p>
             {% elif exercise %}
-            <p class="text-center text-muted mb-4">Решите одно упражнение — день будет засчитан.</p>
+            <p class="text-center text-muted mb-3">Решите одно упражнение — день будет засчитан.</p>
+
+            <div class="text-center mb-3">
+                <div class="exercise-code">{{ exercise.name }}</div>
+                {% if exercise.title %}
+                <h4 class="mt-2 mb-0">{{ exercise.title }}</h4>
+                {% endif %}
+            </div>
 
             <div class="card mb-3">
                 <div class="card-body">
-                    <div id="questionContainer" class="mb-3 p-3 border rounded bg-light" style="font-size:1.25rem; line-height:2.2;"></div>
+                    <div id="questionContainer" class="question-container mb-4 p-3 border rounded"></div>
+                    <div class="mb-2"><strong>Варианты ответов:</strong></div>
                     <div id="variantsContainer" class="d-flex flex-wrap mb-3"></div>
                     <div id="resultMessage" class="mt-3"></div>
                 </div>
             </div>
 
             <p class="text-center">
+                <button type="button" id="replayBtn" class="btn btn-outline-secondary btn-sm mr-2">Повторить озвучку</button>
                 <button type="button" id="resetBtn" class="btn btn-outline-secondary btn-sm">Начать заново</button>
             </p>
+            <audio id="dailyTaskAudio" preload="auto"></audio>
             {% else %}
             <div class="alert alert-info text-center">Сегодня дневное задание уже выполнено.</div>
             <p class="text-center">
@@ -48,67 +80,114 @@
     var variantsEl = document.getElementById("variantsContainer");
     var resultEl = document.getElementById("resultMessage");
     var resetBtn = document.getElementById("resetBtn");
+    var replayBtn = document.getElementById("replayBtn");
+    var audio = document.getElementById("dailyTaskAudio");
 
     var slots = [];
     var filled = [];
 
+    function courseAudioFolder(name) {
+        return String(name || "").slice(0, 6);
+    }
+    function parseAudioNames(value) {
+        if (!value) return [];
+        var names = [];
+        String(value).replace(/\[([^\]]*)\]/g, function (_, inner) {
+            inner.split("|").forEach(function (part) {
+                var n = part.trim();
+                if (n) names.push(n);
+            });
+            return "";
+        });
+        return names;
+    }
+    function audioUrl(fileName) {
+        if (!fileName) return null;
+        return "/media/audio/" + courseAudioFolder(exercise.name) + "/" + fileName + ".mp3";
+    }
+    function playQueue(urls, onDone) {
+        var list = (urls || []).filter(Boolean);
+        if (!list.length) { if (onDone) onDone(); return; }
+        var i = 0;
+        function next() {
+            if (i >= list.length) { audio.onended = null; if (onDone) onDone(); return; }
+            audio.src = list[i++];
+            audio.onended = next;
+            var p = audio.play();
+            if (p && p.catch) p.catch(function () { next(); });
+        }
+        next();
+    }
+    function questionAudioUrls() {
+        var urls = ["/media/audio/VyberitePravVariant.mp3"];
+        parseAudioNames(exercise.audio_question).forEach(function (n) {
+            urls.push(audioUrl(n));
+        });
+        return urls;
+    }
+    function answerAudioUrls() {
+        return parseAudioNames(exercise.audio_answers).map(audioUrl);
+    }
+
     function render() {
         var i = 0;
         questionEl.innerHTML = String(exercise.question || "").replace(/\[\]/g, function () {
-            return '<span class="answer-slot d-inline-block border border-success rounded mx-1 px-2" data-i="' + (i++) + '" style="min-width:80px; min-height:32px; background:#fff;"></span>';
+            return '<span class="answer-slot" data-i="' + (i++) + '"></span>';
         });
         slots = [].slice.call(questionEl.querySelectorAll(".answer-slot"));
         filled = new Array(slots.length).fill(null);
+        highlight();
         renderVariants();
         resultEl.innerHTML = "";
+        playQueue(questionAudioUrls());
     }
 
     function currentSlot() {
-        for (var i = 0; i < filled.length; i++) {
-            if (filled[i] === null) return i;
-        }
+        for (var i = 0; i < filled.length; i++) if (filled[i] === null) return i;
         return -1;
     }
-
+    function highlight() {
+        slots.forEach(function (s) { s.classList.remove("active-slot"); });
+        var idx = currentSlot();
+        if (idx >= 0 && slots[idx]) slots[idx].classList.add("active-slot");
+    }
     function renderVariants() {
         variantsEl.innerHTML = "";
         var idx = currentSlot();
         if (idx < 0) return;
         var group = (exercise.variants && exercise.variants[idx]) || [];
         group.forEach(function (val) {
-            var btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "btn btn-outline-dark m-1";
-            btn.textContent = (val === "" || val === " ") ? " " : val;
-            btn.addEventListener("click", function () { choose(idx, val); });
-            variantsEl.appendChild(btn);
+            if (val == null) return;
+            var stored = (val === "" ? " " : val);
+            var el = document.createElement("div");
+            el.className = "variant-box";
+            el.textContent = (stored === " ") ? " " : stored;
+            el.addEventListener("click", function () { choose(idx, stored); });
+            variantsEl.appendChild(el);
         });
     }
 
     function choose(idx, val) {
         var slot = slots[idx];
-        if (!slot) return;
+        if (!slot || filled[idx] !== null) return;
         var correct = (exercise.answers && exercise.answers[idx]) || [];
-        var ok = correct.indexOf(val) !== -1 || correct.indexOf(String(val)) !== -1;
+        var ok = correct.indexOf(val) !== -1;
 
-        slot.textContent = (val === "" || val === " ") ? " " : val;
-        slot.classList.remove("border-danger", "border-success");
+        slot.textContent = (val === " ") ? " " : val;
+        slot.classList.remove("wrong-answer");
         if (!ok) {
-            slot.classList.add("border-danger");
-            slot.style.background = "#fff0f0";
+            slot.classList.add("wrong-answer");
             setTimeout(function () {
                 slot.textContent = "";
-                slot.classList.remove("border-danger");
-                slot.style.background = "#fff";
+                slot.classList.remove("wrong-answer");
             }, 700);
             return;
         }
-        slot.classList.add("border-success");
-        slot.style.background = "#e8f5e9";
+        slot.classList.add("filled");
         filled[idx] = val;
-
+        highlight();
         if (filled.every(function (v) { return v !== null; })) {
-            onSuccess();
+            playQueue(answerAudioUrls(), onSuccess);
         } else {
             renderVariants();
         }
@@ -120,10 +199,7 @@
 
         fetch(completeUrl, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRF-Token": csrf
-            },
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
             credentials: "same-origin",
             body: JSON.stringify({ exercise_name: exercise.name })
         })
@@ -131,10 +207,8 @@
         .then(function (data) {
             if (data && data.ok) {
                 resultEl.innerHTML =
-                    '<div class="alert alert-success">' +
-                    'День засчитан! Начислено баллов: <strong>' + (data.points || 0) + '</strong>. ' +
-                    'Серия: ' + (data.streak || 0) + '.' +
-                    '</div>' +
+                    '<div class="alert alert-success">День засчитан! Начислено баллов: <strong>' +
+                    (data.points || 0) + '</strong>. Серия: ' + (data.streak || 0) + '.</div>' +
                     '<p class="text-center mt-3"><a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/" class="button-in-table-green" style="width:auto;">К баллам лояльности</a></p>';
             } else {
                 resultEl.innerHTML = '<div class="alert alert-warning">Упражнение пройдено, но день уже был засчитан или задание изменилось.</div>';
@@ -146,6 +220,7 @@
     }
 
     resetBtn.addEventListener("click", render);
+    replayBtn.addEventListener("click", function () { playQueue(questionAudioUrls()); });
     render();
 })();
 </script>
