@@ -116,4 +116,15 @@
     </div>
     {% endif %}
 </div>
+<script>
+$(function () {
+    var hash = window.location.hash;
+    if (hash && $(hash).length) {
+        var $tab = $('a[href="' + hash + '"]');
+        if ($tab.length) {
+            $tab.tab('show');
+        }
+    }
+});
+</script>
 {% endblock container %}

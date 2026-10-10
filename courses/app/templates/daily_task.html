@@ -33,7 +33,7 @@
             {% if error %}
             <div class="alert alert-warning text-center">{{ error }}</div>
             <p class="text-center">
-                <a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/" class="button-in-table-green" style="width:auto;">К баллам лояльности</a>
+                <a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/#transactions" class="button-in-table-green" style="width:auto;">К баллам лояльности</a>
             </p>
             {% elif exercise %}
             <p class="text-center text-muted mb-3">Решите одно упражнение — день будет засчитан.</p>
@@ -62,7 +62,7 @@
             {% else %}
             <div class="alert alert-info text-center">Сегодня дневное задание уже выполнено.</div>
             <p class="text-center">
-                <a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/" class="button-in-table-green" style="width:auto;">К баллам лояльности</a>
+                <a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/#transactions" class="button-in-table-green" style="width:auto;">К баллам лояльности</a>
             </p>
             {% endif %}
         </div>
@@ -220,7 +220,7 @@
                 resultEl.innerHTML =
                     '<div class="alert alert-success">День засчитан! Начислено баллов: <strong>' +
                     (data.points || 0) + '</strong>. Серия: ' + (data.streak || 0) + '.</div>' +
-                    '<p class="text-center mt-3"><a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/" class="button-in-table-green" style="width:auto;">К баллам лояльности</a></p>';
+                    '<p class="text-center mt-3"><a href="/{{ source_lang }}/{{ ui_lang }}/loyalty/#transactions" class="button-in-table-green" style="width:auto;">К баллам лояльности</a></p>';
             } else {
                 resultEl.innerHTML = '<div class="alert alert-warning">Упражнение пройдено, но день уже был засчитан или задание изменилось.</div>';
             }
