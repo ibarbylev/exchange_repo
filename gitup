@@ -1,0 +1,35 @@
+#!/bin/bash
+
+set -e  # Остановить выполнение при ошибке
+set -x  # Показывает команды при выполнении
+
+# 📝 Указываем URL репозитория как переменную
+REPO_URL="git@github.com:ibarbylev/exchange_repo.git"
+
+# 1. Проверяем, к тому удалённому репозиторию подключен локальный
+CURRENT_URL=$(git remote get-url origin 2>/dev/null)
+
+if [ "$CURRENT_URL" = "$REPO_URL" ]; then
+  echo "✅ Remote origin установлен корректно."
+else
+  echo "❌ Remote origin отличается или не установлен."
+  exit 1
+fi
+
+# 2. Запушить возможные изменения в удалённом репозитории
+git pull
+
+# 3. Удаляем старый .git и инициализируем новый репозиторий
+rm -rf .git
+git init
+
+# 4. Добавляем и коммитим все файлы
+git add .
+git commit -am "Initial commit"
+
+# 5. Устанавливаем origin и пушим с перезаписью истории
+git remote add origin "$REPO_URL"
+git push -u --force origin master  # или main, если используете main
+
+# 6. Не забудь сделать файл исполняемым!
+# chmod +x gitup
