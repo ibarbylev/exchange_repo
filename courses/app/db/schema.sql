@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS users (
     access_level     SMALLINT NOT NULL DEFAULT 0 CHECK (access_level IN (0, 1, 2)),
     access_until     TIMESTAMPTZ,
 
-    CONSTRAINT users_role_check CHECK (role IN ('admin', 'student', 'manager', 'coach', 'account_manager', 'referral'))
+    CONSTRAINT users_role_check CHECK (role IN ('admin', 'student', 'manager', 'coach', 'account_manager', 'referrer'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
