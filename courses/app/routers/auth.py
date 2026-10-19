@@ -23,7 +23,7 @@ from app.repositories.user import (
     can_send_verification_email
 )
 from app.repositories.loyalty import award_welcome
-from app.repositories.referral import get_referral_by_code, add_client_to_referral
+from app.repositories.referrer import get_referrer_by_code, add_referral_to_referrer
 from app.routers.deps import LangDep, render_template
 
 router = APIRouter(tags=["auth"])
@@ -255,14 +255,15 @@ async def register_post(
     )
 
     # Обработка реферального кода из cookie
-    referral_code = request.cookies.get("referral_code")
-    if referral_code:
+    referrer_code = request.cookies.get("referrer_code")
+    if referrer_code:
         try:
-            referral = await get_referral_by_code(pool, referral_code)
+            referral = await get_referrer_by_code(pool, referrer_code)
             if referral and referral["user_id"] != new_user["id"]:
-                await add_client_to_referral(pool, referral_code, new_user["id"])
+                await add_referral_to_referrer(pool, referrer_code, new_user["id"])
         except Exception:
             # Не ломаем регистрацию из-за ошибки в реферале
+            # TODO добавить запись в лог!!!
             pass
 
     # Приветственные баллы лояльности

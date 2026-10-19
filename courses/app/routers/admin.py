@@ -14,10 +14,10 @@ from app.db.dependencies import DBPoolDep, CurrentSuperUser
 from app.middleware.csrf import verify_csrf
 from app.repositories import coach_schedule
 from app.repositories.admin import (
-    get_all_referrals_with_stats, get_users_with_referral_role_without_record
+    get_all_referrers_with_stats, get_users_with_referrer_role_without_record
 )
 from app.repositories.loyalty import award_useful_feedback
-from app.repositories.referral import get_referral_by_user_id, create_referral
+from app.repositories.referrer import get_referrer_by_user_id, create_referrer
 from app.repositories.shop import pay_order, replenish_balance_and_pay_order
 from app.repositories.user import create_user_session
 from app.routers.feedback import FEEDBACK_TOPICS
@@ -649,7 +649,7 @@ async def admin_user_role_change(
         "manager",
         "coach",
         "account_manager",
-        "referral",
+        "referrer",
     }
 
     if role not in allowed_roles:
@@ -1500,8 +1500,8 @@ async def admin_invoices_print(
 # Админка: управление рефералами
 # ============================================================
 
-@router.get("/referral-management/", response_class=HTMLResponse)
-async def admin_referral_management_page(
+@router.get("/referrer-management/", response_class=HTMLResponse)
+async def admin_referrer_management_page(
     request: Request,
     pool: DBPoolDep,
     current_superuser: CurrentSuperUser = None,
@@ -1513,13 +1513,13 @@ async def admin_referral_management_page(
             status_code=303,
         )
 
-    referrals = await get_all_referrals_with_stats(pool)
-    pending_users = await get_users_with_referral_role_without_record(pool)
+    referrers = await get_all_referrers_with_stats(pool)
+    pending_users = await get_users_with_referrer_role_without_record(pool)
 
     context = {
         "request": request,
         "user": current_superuser,
-        "referrals": referrals,
+        "referrals": referrers,
         "pending_users": pending_users,
         "active_tab": tab if tab in ("list", "create") else "list",
         "csrf_token": getattr(request.state, "csrf_token", None),
@@ -1527,13 +1527,13 @@ async def admin_referral_management_page(
 
     return templates.TemplateResponse(
         request=request,
-        name="admin/referral_management.html",
+        name="admin/referrer_management.html",
         context=context,
     )
 
 
 @router.post("/referral-management/create/")
-async def admin_referral_management_create(
+async def admin_referrer_management_create(
     request: Request,
     pool: DBPoolDep,
     current_superuser: CurrentSuperUser = None,
@@ -1547,27 +1547,27 @@ async def admin_referral_management_create(
             status_code=303,
         )
 
-    # Проверяем, что у пользователя действительно роль referral
+    # Проверяем, что у пользователя действительно роль referrer
     user = await pool.fetchrow(
         "SELECT id, role FROM users WHERE id = $1",
         user_id,
     )
-    if not user or user["role"] != "referral":
+    if not user or user["role"] != "referrer":
         return RedirectResponse(
-            url="/admin/referral-management/?tab=create&error=not_referral",
+            url="/admin/referral-management/?tab=create&error=not_referrer",
             status_code=303,
         )
 
     try:
-        await create_referral(pool, user_id, commission_percent)
+        await create_referrer(pool, user_id, commission_percent)
     except Exception:
         return RedirectResponse(
-            url="/admin/referral-management/?tab=create&error=create_failed",
+            url="/admin/referrer-management/?tab=create&error=create_failed",
             status_code=303,
         )
 
     return RedirectResponse(
-        url="/admin/referral-management/?tab=list&success=1",
+        url="/admin/referrer-management/?tab=list&success=1",
         status_code=303,
     )
 

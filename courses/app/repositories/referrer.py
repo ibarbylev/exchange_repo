@@ -1,5 +1,5 @@
 """
-Репозиторий для работы с рефералами.
+Репозиторий для работы с реферерами (владельцами реферальных ссылок).
 """
 from __future__ import annotations
 
@@ -16,12 +16,12 @@ def generate_referral_code(length: int = 16) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-async def get_referral_by_user_id(pool: Pool, user_id: int) -> dict[str, Any] | None:
-    """Получает запись реферала по user_id."""
+async def get_referrer_by_user_id(pool: Pool, user_id: int) -> dict[str, Any] | None:
+    """Получает запись реферера по user_id."""
     row = await pool.fetchrow(
         """
-        SELECT id, user_id, code, client_ids, payments, commission_percent, created_at
-        FROM referrals
+        SELECT id, user_id, code, referral_ids, payments, commission_percent, created_at
+        FROM referrers
         WHERE user_id = $1
         """,
         user_id,
@@ -29,12 +29,12 @@ async def get_referral_by_user_id(pool: Pool, user_id: int) -> dict[str, Any] | 
     return dict(row) if row else None
 
 
-async def get_referral_by_code(pool: Pool, code: str) -> dict[str, Any] | None:
-    """Получает запись реферала по коду."""
+async def get_referrer_by_code(pool: Pool, code: str) -> dict[str, Any] | None:
+    """Получает запись реферера по коду."""
     row = await pool.fetchrow(
         """
-        SELECT id, user_id, code, client_ids, payments, commission_percent, created_at
-        FROM referrals
+        SELECT id, user_id, code, referral_ids, payments, commission_percent, created_at
+        FROM referrers
         WHERE code = $1
         """,
         code,
@@ -42,10 +42,10 @@ async def get_referral_by_code(pool: Pool, code: str) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-async def create_referral(pool: Pool, user_id: int, commission_percent: float = 10.0) -> dict[str, Any]:
-    """Создаёт запись реферала с уникальным кодом. Вызывать после назначения роли."""
+async def create_referrer(pool: Pool, user_id: int, commission_percent: float = 10.0) -> dict[str, Any]:
+    """Создаёт запись реферера с уникальным кодом. Вызывать после назначения роли."""
     # Проверяем, нет ли уже
-    existing = await get_referral_by_user_id(pool, user_id)
+    existing = await get_referrer_by_user_id(pool, user_id)
     if existing:
         return existing
 
@@ -55,9 +55,9 @@ async def create_referral(pool: Pool, user_id: int, commission_percent: float = 
         try:
             row = await pool.fetchrow(
                 """
-                INSERT INTO referrals (user_id, code, commission_percent)
+                INSERT INTO referrers (user_id, code, commission_percent)
                 VALUES ($1, $2, $3)
-                RETURNING id, user_id, code, client_ids, payments, commission_percent, created_at
+                RETURNING id, user_id, code, referral_ids, payments, commission_percent, created_at
                 """,
                 user_id,
                 code,
@@ -67,32 +67,32 @@ async def create_referral(pool: Pool, user_id: int, commission_percent: float = 
         except Exception:
             continue  # код занят, пробуем другой
 
-    raise RuntimeError("Не удалось сгенерировать уникальный код реферала")
+    raise RuntimeError("Не удалось сгенерировать уникальный код реферера")
 
 
-async def add_client_to_referral(pool: Pool, code: str, client_user_id: int) -> bool:
+async def add_referral_to_referrer(pool: Pool, code: str, referral_user_id: int) -> bool:
     """
-    Добавляет клиента в список реферала (без дублей).
+    Добавляет реферала (нового пользователя) в список реферера (без дублей).
     Возвращает True, если добавление произошло.
     """
     result = await pool.execute(
         """
-        UPDATE referrals
-        SET client_ids = array_append(client_ids, $2)
+        UPDATE referrers
+        SET referral_ids = array_append(referral_ids, $2)
         WHERE code = $1
-          AND NOT ($2 = ANY(client_ids))
+          AND NOT ($2 = ANY(referral_ids))
           AND user_id != $2
         """,
         code,
-        client_user_id,
+        referral_user_id,
     )
     # result looks like "UPDATE 1" or "UPDATE 0"
     return result.endswith("1")
 
 
-async def get_clients_info(pool: Pool, client_ids: list[int]) -> list[dict[str, Any]]:
-    """Получает краткую информацию о клиентах реферала."""
-    if not client_ids:
+async def get_referrals_info(pool: Pool, referral_ids: list[int]) -> list[dict[str, Any]]:
+    """Получает краткую информацию о рефералах (пользователях, пришедших по ссылке)."""
+    if not referral_ids:
         return []
 
     rows = await pool.fetch(
@@ -102,6 +102,6 @@ async def get_clients_info(pool: Pool, client_ids: list[int]) -> list[dict[str, 
         WHERE id = ANY($1::int[])
         ORDER BY created_at DESC
         """,
-        client_ids,
+        referral_ids,
     )
     return [dict(r) for r in rows]

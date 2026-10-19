@@ -1,16 +1,16 @@
 {% extends "admin/admin_base_page.html" %}
 
-{% block title %}Управление рефералами{% endblock %}
+{% block title %}Управление реферерами{% endblock %}
 
 {% block content %}
 <div class="container mt-4" style="max-width: 1100px;">
 
-    <h2 class="mb-4">Управление рефералами</h2>
+    <h2 class="mb-4">Управление реферерами</h2>
 
     {% if request.query_params.get('success') %}
         <div class="alert alert-success">
             <i class="bi bi-check-circle me-2"></i>
-            Реферальная запись успешно создана.
+            Запись реферера успешно создана.
         </div>
     {% endif %}
 
@@ -21,7 +21,7 @@
             {% if err == 'not_referral' %}
                 У пользователя нет роли <code>referral</code>. Сначала измените роль.
             {% elif err == 'create_failed' %}
-                Не удалось создать реферальную запись.
+                Не удалось создать запись реферера.
             {% else %}
                 Произошла ошибка.
             {% endif %}
@@ -38,7 +38,7 @@
                     role="tab"
                     aria-controls="list"
                     aria-selected="{{ 'true' if active_tab == 'list' else 'false' }}">
-                Список рефералов
+                Список рефереров
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -50,14 +50,14 @@
                     role="tab"
                     aria-controls="create"
                     aria-selected="{{ 'true' if active_tab == 'create' else 'false' }}">
-                Создать реферала
+                Создать реферера
             </button>
         </li>
     </ul>
 
     <div class="tab-content" id="referralTabsContent">
 
-        <!-- ========== Список рефералов ========== -->
+        <!-- ========== Список рефереров ========== -->
         <div class="tab-pane fade {% if active_tab == 'list' %}show active{% endif %}"
              id="list"
              role="tabpanel"
@@ -99,12 +99,12 @@
                 </div>
             {% else %}
                 <div class="alert alert-info">
-                    Пока нет ни одной реферальной записи.
+                    Пока нет ни одной записи реферера.
                 </div>
             {% endif %}
         </div>
 
-        <!-- ========== Создать реферала ========== -->
+        <!-- ========== Создать реферера ========== -->
         <div class="tab-pane fade {% if active_tab == 'create' %}show active{% endif %}"
              id="create"
              role="tabpanel"
@@ -112,13 +112,13 @@
 
             <div class="alert alert-warning">
                 <i class="bi bi-info-circle me-2"></i>
-                Если не нашли нужного реферала, проверьте его роль на странице
+                Если не нашли нужного реферера, проверьте его роль на странице
                 <a href="/admin/user-role-change/" class="alert-link">Изменение роли</a>.
             </div>
 
             {% if pending_users %}
                 <p class="text-muted">
-                    Пользователи с ролью <code>referral</code>, у которых ещё нет записи в таблице <code>referrals</code>:
+                    Пользователи с ролью <code>referrer</code>, у которых ещё нет записи в таблице <code>referrers</code>:
                 </p>
 
                 <div class="table-responsive">
