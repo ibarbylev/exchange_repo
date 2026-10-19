@@ -1,0 +1,287 @@
+{% extends "base_page.html" %}
+
+{% block title %}{{ _('Referral Program') }}{% endblock %}
+
+{% block container %}
+
+<div class="container" style="padding: 40px 15px; max-width: 1100px;">
+    <div class="row align-items-center mb-4">
+        <div class="col-12">
+            <h2 class="mb-2">
+                <i class="fa-solid fa-link" style="color: #86bc42;"></i>
+                {{ _('Your Referral Page') }}
+            </h2>
+            <p class="text-muted" style="font-size: 0.9rem;">
+                {{ _('Share your link and earn commission from your users.') }}
+            </p>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-warning">{{ _(error) }}</div>
+    {% endif %}
+
+    {% if referral %}
+    <!-- Referral Link -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h5 class="card-title">{{ _('Your referral link') }}</h5>
+            <div class="input-group mb-2">
+                <input type="text" class="form-control" id="referralLink" value="{{ referral_link }}" readonly>
+                <div class="input-group-append">
+                    <button class="btn button-in-table-green" type="button" onclick="copyReferralLink()">
+                        <i class="fa-solid fa-copy"></i> {{ _('Copy') }}
+                    </button>
+                </div>
+            </div>
+            <small class="text-muted" style="font-size: 0.9rem;">
+                {{ _('Users who register via this link will receive 10 000 loyalty points (10 € discount).') }}
+            </small>
+
+            <!-- QR code -->
+            <div class="text-center mt-4 mb-3">
+                <div id="referralQr" class="d-inline-block p-2 border bg-white"></div>
+                <div class="mt-2">
+                    <small class="text-muted" style="font-size: 0.9rem;">{{ _('Scan to open your referral link') }}</small>
+                </div>
+            </div>
+
+            <!-- Share -->
+            {% set share_text = _('Join the courses via my link and get 10 000 loyalty points!') %}
+            <h6 class="mt-4">{{ _('Share your link') }}</h6>
+            <div class="row">
+                <div class="col-6 col-md-3 mb-2">
+                    <a class="btn button-in-table-black" target="_blank" rel="noopener"
+                       href="https://t.me/share/url?url={{ referral_link|urlencode }}&text={{ share_text|urlencode }}">
+                        <i class="fa-brands fa-telegram"></i> Telegram
+                    </a>
+                </div>
+                <div class="col-6 col-md-3 mb-2">
+                    <a class="btn button-in-table-black" target="_blank" rel="noopener"
+                       href="https://wa.me/?text={{ (share_text ~ ' ' ~ referral_link)|urlencode }}">
+                        <i class="fa-brands fa-whatsapp"></i> WhatsApp
+                    </a>
+                </div>
+                <div class="col-6 col-md-3 mb-2">
+                    <a class="btn button-in-table-black" target="_blank" rel="noopener"
+                       href="https://www.facebook.com/sharer/sharer.php?u={{ referral_link|urlencode }}">
+                        <i class="fa-brands fa-facebook"></i> Facebook
+                    </a>
+                </div>
+                <div class="col-6 col-md-3 mb-2">
+                    <a class="btn button-in-table-black" target="_blank" rel="noopener"
+                       href="https://twitter.com/intent/tweet?url={{ referral_link|urlencode }}&text={{ share_text|urlencode }}">
+                        <i class="fa-brands fa-x-twitter"></i> X
+                    </a>
+                </div>
+                <div class="col-6 col-md-3 mb-2">
+                    <a class="btn button-in-table-black"
+                       href="mailto:?subject={{ _('Courses with a bonus')|urlencode }}&body={{ (share_text ~ ' ' ~ referral_link)|urlencode }}">
+                        <i class="fa-solid fa-envelope"></i> Email
+                    </a>
+                </div>
+                <div class="col-6 col-md-3 mb-2">
+                    <button class="btn button-in-table-black" type="button" onclick="downloadReferralQr()">
+                        <i class="fa-solid fa-download"></i> {{ _('Download QR') }}
+                    </button>
+                </div>
+                <div class="col-6 col-md-3 mb-2 d-none" id="nativeShareWrap">
+                    <button class="btn button-in-table-green" type="button" onclick="nativeShare()">
+                        <i class="fa-solid fa-share-nodes"></i> {{ _('Share') }}
+                    </button>
+                </div>
+            </div>
+
+            <!-- Embed code -->
+            <h6 class="mt-4">{{ _('Embed on your website') }}</h6>
+            <small class="text-muted d-block mb-2" style="font-size: 0.9rem;">
+                {{ _('Paste this code into your page: it contains the QR code and your link.') }}
+            </small>
+            <textarea class="form-control mb-2" id="embedCode" rows="5" readonly></textarea>
+            <button class="btn button-in-table-green" type="button" onclick="copyEmbedCode()">
+                <i class="fa-solid fa-code"></i> {{ _('Copy HTML code') }}
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="row mb-4">
+        <div class="col-md-4 mb-3">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h3 class="text-success">{{ clients|length }}</h3>
+                    <p class="mb-0">{{ _('Registered users') }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h3 class="text-success">{{ referral.commission_percent }}%</h3>
+                    <p class="mb-0">{{ _('Your commission') }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-3">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h3 class="text-success">
+                        {% set total_commission = namespace(value=0) %}
+                        {% for p in payments %}
+                            {% set total_commission.value = total_commission.value + (p.commission|default(0)|float) %}
+                        {% endfor %}
+                        {{ '%.2f'|format(total_commission.value) }} €
+                    </h3>
+                    <p class="mb-0">{{ _('Total earned') }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clients -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">{{ _('Your users') }}</h5>
+        </div>
+        <div class="card-body">
+            {% if clients %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>{{ _('Name') }}</th>
+                            <th>{{ _('Email') }}</th>
+                            <th>{{ _('Registered') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for client in clients %}
+                        <tr>
+                            <td>{{ client.first_name or '' }} {{ client.last_name or '' }} <small class="text-muted">({{ client.username }})</small></td>
+                            <td>{{ client.email }}</td>
+                            <td>{{ client.created_at.strftime('%d.%m.%Y') if client.created_at else '' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">{{ _('No users registered via your link yet.') }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Payments -->
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h5 class="mb-0">{{ _('Payments & commissions') }}</h5>
+        </div>
+        <div class="card-body">
+            {% if payments %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>{{ _('Date') }}</th>
+                            <th>{{ _('Amount') }}</th>
+                            <th>{{ _('Commission') }}</th>
+                            <th>{{ _('User ID') }}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in payments %}
+                        <tr>
+                            <td>{{ p.date or '' }}</td>
+                            <td>{{ p.amount or 0 }} €</td>
+                            <td class="text-success font-weight-bold">{{ p.commission or 0 }} €</td>
+                            <td>{{ p.user_id or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted mb-0">{{ _('No payments yet.') }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+    const REFERRAL_LINK = {{ referral_link|tojson }};
+    const SHARE_TEXT = {{ _('Join the courses via my link and get 10 000 loyalty points!')|tojson }};
+
+    function copyReferralLink() {
+        const input = document.getElementById('referralLink');
+        input.select();
+        input.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(input.value).then(() => {
+            alert({{ _("Link copied!")|tojson }});
+        }).catch(() => {
+            document.execCommand('copy');
+            alert({{ _("Link copied!")|tojson }});
+        });
+    }
+
+    // QR-код
+    (function () {
+        const box = document.getElementById('referralQr');
+        if (box && window.QRCode) {
+            new QRCode(box, {
+                text: REFERRAL_LINK,
+                width: 180,
+                height: 180,
+                colorDark: '#2d3e50',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+    })();
+
+    // HTML-код для вставки на сайт блогера
+    function buildEmbedCode() {
+        const canvas = document.querySelector('#referralQr canvas');
+        if (!canvas) return '';
+        const esc = s => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+        return '<a href="' + esc(REFERRAL_LINK) + '" target="_blank" rel="noopener">\n' +
+               '  <img src="' + canvas.toDataURL('image/png') + '" alt="QR" width="180" height="180">\n' +
+               '</a>';
+    }
+
+    document.getElementById('embedCode').value = buildEmbedCode();
+
+    function copyEmbedCode() {
+        const area = document.getElementById('embedCode');
+        area.select();
+        navigator.clipboard.writeText(area.value).then(() => {
+            alert({{ _("HTML code copied!")|tojson }});
+        }).catch(() => {
+            document.execCommand('copy');
+            alert({{ _("HTML code copied!")|tojson }});
+        });
+    }
+
+    // Скачать QR как PNG
+    function downloadReferralQr() {
+        const canvas = document.querySelector('#referralQr canvas');
+        if (!canvas) return;
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = 'referral-qr.png';
+        a.click();
+    }
+
+    // Системное меню «Поделиться» (мобильные браузеры)
+    if (navigator.share) {
+        document.getElementById('nativeShareWrap').classList.remove('d-none');
+    }
+    function nativeShare() {
+        navigator.share({ title: document.title, text: SHARE_TEXT, url: REFERRAL_LINK }).catch(() => {});
+    }
+    </script>
+    {% endif %}
+</div>
+
+
+
+{% endblock %}
