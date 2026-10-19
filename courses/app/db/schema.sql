@@ -415,16 +415,15 @@ CREATE INDEX IF NOT EXISTS idx_loyalty_user_id ON loyalty(user_id);
 --------------------------------------------------------------------------------
 -- 11. Таблица рефералов
 --------------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS referrals (
+CREATE TABLE IF NOT EXISTS referrers (
     id                  SERIAL PRIMARY KEY,
     user_id             INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    code                VARCHAR(16) NOT NULL UNIQUE,          -- единственная ссылка /ref/CODE
-    client_ids          INTEGER[] NOT NULL DEFAULT '{}',      -- массив id клиентов
-    payments            JSONB NOT NULL DEFAULT '[]'::jsonb,   -- [{"amount": 50.00, "date": "2026-10-15"}, ...]
+    code                VARCHAR(16) NOT NULL UNIQUE,
+    referral_ids        INTEGER[] NOT NULL DEFAULT '{}',   -- было client_ids
+    payments            JSONB NOT NULL DEFAULT '[]'::jsonb,
     commission_percent  DECIMAL(5,2) NOT NULL DEFAULT 10.00,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 
 
 --------------------------------------------------------------------------------
