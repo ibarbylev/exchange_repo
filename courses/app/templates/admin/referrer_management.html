@@ -1,0 +1,181 @@
+{% extends "admin/admin_base_page.html" %}
+
+{% block title %}Управление рефералами{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 1100px;">
+
+    <h2 class="mb-4">Управление рефералами</h2>
+
+    {% if request.query_params.get('success') %}
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle me-2"></i>
+            Реферальная запись успешно создана.
+        </div>
+    {% endif %}
+
+    {% if request.query_params.get('error') %}
+        {% set err = request.query_params.get('error') %}
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            {% if err == 'not_referral' %}
+                У пользователя нет роли <code>referral</code>. Сначала измените роль.
+            {% elif err == 'create_failed' %}
+                Не удалось создать реферальную запись.
+            {% else %}
+                Произошла ошибка.
+            {% endif %}
+        </div>
+    {% endif %}
+
+    <ul class="nav nav-tabs mb-4" id="referralTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'list' %}active{% endif %}"
+                    id="list-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#list"
+                    type="button"
+                    role="tab"
+                    aria-controls="list"
+                    aria-selected="{{ 'true' if active_tab == 'list' else 'false' }}">
+                Список рефералов
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'create' %}active{% endif %}"
+                    id="create-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#create"
+                    type="button"
+                    role="tab"
+                    aria-controls="create"
+                    aria-selected="{{ 'true' if active_tab == 'create' else 'false' }}">
+                Создать реферала
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="referralTabsContent">
+
+        <!-- ========== Список рефералов ========== -->
+        <div class="tab-pane fade {% if active_tab == 'list' %}show active{% endif %}"
+             id="list"
+             role="tabpanel"
+             aria-labelledby="list-tab">
+
+            {% if referrals %}
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>Пользователь</th>
+                                <th>Email</th>
+                                <th>Код</th>
+                                <th>Комиссия, %</th>
+                                <th>Клиентов</th>
+                                <th>Выплат</th>
+                                <th>Создан</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in referrals %}
+                            <tr>
+                                <td>{{ r.user_id }}</td>
+                                <td>
+                                    {{ r.last_name or '' }} {{ r.first_name or '' }}
+                                    {% if r.username %}<br><small class="text-muted">{{ r.username }}</small>{% endif %}
+                                </td>
+                                <td>{{ r.email }}</td>
+                                <td><code>{{ r.code }}</code></td>
+                                <td>{{ r.commission_percent }}</td>
+                                <td>{{ r.clients_count }}</td>
+                                <td>{{ r.payments_count }}</td>
+                                <td>{{ r.created_at.strftime('%d.%m.%Y') if r.created_at else '—' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-info">
+                    Пока нет ни одной реферальной записи.
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- ========== Создать реферала ========== -->
+        <div class="tab-pane fade {% if active_tab == 'create' %}show active{% endif %}"
+             id="create"
+             role="tabpanel"
+             aria-labelledby="create-tab">
+
+            <div class="alert alert-warning">
+                <i class="bi bi-info-circle me-2"></i>
+                Если не нашли нужного реферала, проверьте его роль на странице
+                <a href="/admin/user-role-change/" class="alert-link">Изменение роли</a>.
+            </div>
+
+            {% if pending_users %}
+                <p class="text-muted">
+                    Пользователи с ролью <code>referral</code>, у которых ещё нет записи в таблице <code>referrals</code>:
+                </p>
+
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Пользователь</th>
+                                <th>Email</th>
+                                <th>Роль</th>
+                                <th>Комиссия, %</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in pending_users %}
+                            <tr>
+                                <td>{{ u.id }}</td>
+                                <td>
+                                    {{ u.last_name or '' }} {{ u.first_name or '' }}
+                                    {% if u.username %}<br><small class="text-muted">{{ u.username }}</small>{% endif %}
+                                </td>
+                                <td>{{ u.email }}</td>
+                                <td><span class="badge bg-info text-dark">{{ u.role }}</span></td>
+                                <td>
+                                    <form method="POST"
+                                          action="/admin/referral-management/create/"
+                                          class="d-flex gap-2 align-items-center">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="user_id" value="{{ u.id }}">
+                                        <input type="number"
+                                               name="commission_percent"
+                                               class="form-control form-control-sm"
+                                               style="width: 90px;"
+                                               value="10"
+                                               min="0"
+                                               max="100"
+                                               step="0.1"
+                                               required>
+                                        <button type="submit" class="btn btn-success btn-sm">
+                                            Создать
+                                        </button>
+                                    </form>
+                                </td>
+                                <td></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="alert alert-secondary">
+                    Нет пользователей с ролью <code>referral</code>, которым ещё не создана запись.
+                </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+{% endblock %}
