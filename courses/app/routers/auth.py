@@ -255,19 +255,37 @@ async def register_post(
     )
 
     # Обработка реферального кода из cookie
+    # Новый пользователь: привязка к рефереру + 1000 welcome + 10 000 от программы
     referrer_code = request.cookies.get("referrer_code")
+    referral_attached = False
     if referrer_code:
         try:
             referral = await get_referrer_by_code(pool, referrer_code)
             if referral and referral["user_id"] != new_user["id"]:
-                await add_referral_to_referrer(pool, referrer_code, new_user["id"])
+                referral_attached = await add_referral_to_referrer(
+                    pool, referrer_code, new_user["id"]
+                )
         except Exception:
             # Не ломаем регистрацию из-за ошибки в реферале
             # TODO добавить запись в лог!!!
             pass
 
-    # Приветственные баллы лояльности
+    # Приветственные баллы лояльности (1000)
     await award_welcome(pool, new_user["id"])
+
+    # Бонус реферальной программы (10 000), только если привязка прошла
+    if referral_attached:
+        try:
+            await pool.fetchval(
+                "SELECT insert_into_loyalty($1, $2, $3)",
+                new_user["id"],
+                10000,
+                "Referral program bonus",
+            )
+        except Exception:
+            # Не ломаем регистрацию из-за ошибки начисления
+            # TODO добавить запись в лог!!!
+            pass
 
     # Отправляем письмо подтверждения
     token = create_email_verification_token(email)

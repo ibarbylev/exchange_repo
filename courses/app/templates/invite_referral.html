@@ -1,0 +1,74 @@
+{% extends "base_page.html" %}
+
+{% block title %}{{ _('Referral invitation') }}{% endblock %}
+
+{% block container %}
+<div class="container" style="padding: 40px 15px; max-width: 640px;">
+
+    {% if state == "invalid" %}
+    <div class="card shadow-sm">
+        <div class="card-body text-center py-5">
+            <i class="fa-solid fa-link-slash fa-2x mb-3" style="color: #c0392b;"></i>
+            <h3 class="mb-3">{{ _('Invalid referral link') }}</h3>
+            <p class="text-muted mb-4">
+                {{ _('This referral link is not valid or has expired.') }}
+            </p>
+            <a href="/{{ source_lang }}/{{ ui_lang }}/" class="btn button-in-table-green">
+                {{ _('Go to homepage') }}
+            </a>
+        </div>
+    </div>
+
+    {% elif state == "already_logged_in" %}
+    <div class="card shadow-sm">
+        <div class="card-body text-center py-5">
+            <i class="fa-solid fa-user-check fa-2x mb-3" style="color: #86bc42;"></i>
+            <h3 class="mb-3">{{ _('Only for new users') }}</h3>
+            <p class="text-muted mb-4">
+                {{ _('The referral program is available only for new registrations. You are already signed in.') }}
+            </p>
+            <a href="{{ home_url }}" class="btn button-in-table-green">
+                {{ _('Go to homepage') }}
+            </a>
+        </div>
+    </div>
+
+    {% else %}
+    {# state == "invite" — гость, можно регистрироваться #}
+    <div class="card shadow-sm">
+        <div class="card-body py-4 px-4">
+            <div class="text-center mb-4">
+                <i class="fa-solid fa-gift fa-2x mb-3" style="color: #86bc42;"></i>
+                <h3 class="mb-2">{{ _('You are invited!') }}</h3>
+                <p class="text-muted" style="font-size: 0.95rem;">
+                    {{ _('Register via this link and get loyalty points as a welcome gift.') }}
+                </p>
+            </div>
+
+            <div class="alert alert-success" role="alert" style="font-size: 0.95rem;">
+                <strong>{{ _('Your bonuses on registration:') }}</strong>
+                <ul class="mb-0 mt-2">
+                    <li>{{ _('Welcome points:') }} <strong>{{ bonus_welcome }}</strong></li>
+                    <li>{{ _('Referral program bonus:') }} <strong>{{ bonus_referral }}</strong></li>
+                </ul>
+            </div>
+
+            <p class="text-muted small mb-4">
+                {{ _('The offer is only for new users. If you already have an account, please go to the homepage and sign in.') }}
+            </p>
+
+            <div class="d-flex flex-column flex-sm-row gap-2 justify-content-center">
+                <a href="{{ register_url }}" class="btn button-in-table-green">
+                    <i class="fa-solid fa-user-plus"></i>
+                    {{ _('Register') }}
+                </a>
+                <a href="{{ home_url }}" class="btn button-in-table-black">
+                    {{ _('Go to homepage') }}
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
