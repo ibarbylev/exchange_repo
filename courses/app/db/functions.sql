@@ -229,6 +229,9 @@ BEGIN
         SET status = 'paid'
         WHERE id = v_order_id;
 
+        -- Реферальная комиссия (P1): запись в referrers.payments
+        PERFORM accrue_referral_commission(v_order_id);
+
         -- Кэшбэк лояльности: 1% от суммы * 1000 → amount * 10
         IF FLOOR(v_order_amount * 10)::INTEGER > 0 THEN
             PERFORM insert_into_loyalty(
@@ -350,7 +353,77 @@ $$;
 
 
 --------------------------------------------------------------------------------
--- 7. Функция добавления строк с таблицу лояльности loyalty
+-- 8. Реферальная комиссия (P1): только запись в referrers.payments (JSONB)
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION accrue_referral_commission(p_order_id INTEGER)
+RETURNS BOOLEAN AS $$
+DECLARE
+    v_user_id     INTEGER;
+    v_amount      DECIMAL(10, 2);
+    v_referrer_pk INTEGER;
+    v_percent     DECIMAL(5, 2);
+    v_commission  DECIMAL(10, 2);
+    v_already     BOOLEAN;
+BEGIN
+    SELECT o.user_id, o.amount
+    INTO v_user_id, v_amount
+    FROM orders o
+    WHERE o.id = p_order_id
+      AND o.status = 'paid';
+
+    IF NOT FOUND OR v_amount IS NULL OR v_amount <= 0 THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Реферер, у которого этот пользователь в referral_ids (не сам себе)
+    SELECT r.id, r.commission_percent
+    INTO v_referrer_pk, v_percent
+    FROM referrers r
+    WHERE v_user_id = ANY (r.referral_ids)
+      AND r.user_id <> v_user_id
+    LIMIT 1;
+
+    IF v_referrer_pk IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Идемпотентность: уже есть запись с этим order_id
+    SELECT EXISTS (
+        SELECT 1
+        FROM referrers r
+        CROSS JOIN LATERAL jsonb_array_elements(r.payments) AS elem
+        WHERE r.id = v_referrer_pk
+          AND (elem->>'order_id')::INTEGER = p_order_id
+    ) INTO v_already;
+
+    IF v_already THEN
+        RETURN FALSE;
+    END IF;
+
+    v_commission := ROUND(v_amount * v_percent / 100.0, 2);
+    IF v_commission <= 0 THEN
+        RETURN FALSE;
+    END IF;
+
+    UPDATE referrers
+    SET payments = payments || jsonb_build_array(
+        jsonb_build_object(
+            'date',       to_char(NOW(), 'YYYY-MM-DD'),
+            'amount',     v_amount,
+            'commission', v_commission,
+            'user_id',    v_user_id,
+            'order_id',   p_order_id
+        )
+    )
+    WHERE id = v_referrer_pk;
+
+    RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql;
+
+
+--------------------------------------------------------------------------------
+-- 9. Функция добавления строк с таблицу лояльности loyalty
 -- проверяет, чтобы баланс баллов для пользователя не стал отрицательным
 -- Добавлены собственные исключения:
 -- 'P0001'- пользователь не найден
