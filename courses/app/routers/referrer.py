@@ -14,6 +14,7 @@ from app.repositories.referrer import (
     get_referrer_by_user_id,
     get_referrer_by_code,
     get_referrals_info,
+    _normalize_payments,
 )
 from app.core.config import DEFAULT_SOURCE_LANGUAGE, DEFAULT_UI_LANGUAGE
 
@@ -165,8 +166,8 @@ async def referrer_page(
 
     referrals = await get_referrals_info(pool, referrer.get("referral_ids") or [])
 
-    # Подготавливаем payments для отображения (уже JSONB)
-    payments = referrer.get("payments") or []
+    # Нормализуем payments: разворачиваем «битые» строковые элементы в dict
+    payments = _normalize_payments(referrer.get("payments"))
 
     # Формируем ссылку динамически из текущего запроса (протокол + домен + порт)
     base_url = str(request.base_url).rstrip("/")

@@ -110,7 +110,12 @@ async def get_referrals_info(pool: Pool, referral_ids: list[int]) -> list[dict[s
 
 
 def _normalize_payments(payments_raw: Any) -> list[dict[str, Any]]:
-    """Приводит payments (list / str / None) к списку словарей."""
+    """
+    Приводит payments (list / str / None) к списку словарей.
+
+    Учитывает «битые» элементы: строки с JSON-объектом или JSON-массивом,
+    которые могли попасть в массив из-за некорректной вставки.
+    """
     if payments_raw is None:
         return []
     if isinstance(payments_raw, str):
@@ -122,7 +127,22 @@ def _normalize_payments(payments_raw: Any) -> list[dict[str, Any]]:
         payments = payments_raw
     else:
         payments = list(payments_raw) if payments_raw else []
-    return [p for p in payments if isinstance(p, dict)]
+
+    result: list[dict[str, Any]] = []
+    for p in payments:
+        if isinstance(p, dict):
+            result.append(p)
+            continue
+        if isinstance(p, str):
+            try:
+                parsed = json.loads(p)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if isinstance(parsed, dict):
+                result.append(parsed)
+            elif isinstance(parsed, list):
+                result.extend(x for x in parsed if isinstance(x, dict))
+    return result
 
 
 def _calc_balance(payments: list[dict[str, Any]]) -> tuple[float, float, float]:
@@ -200,15 +220,18 @@ async def add_referrer_payout(
         "comment": (comment or "").strip()[:500],
     }
 
+    # Важно: передаём ОДИН объект, а не массив.
+    # payments || '{"date":..., "amount":-10}'::jsonb  →  append object
+    # (json.dumps([payout_entry]) + особенности asyncpg давали строковый элемент)
     row = await pool.fetchrow(
         """
         UPDATE referrers
-        SET payments = payments || $2::jsonb
+        SET payments = payments || ($2::text)::jsonb
         WHERE user_id = $1
         RETURNING id, user_id, code, referral_ids, payments, commission_percent, created_at
         """,
         user_id,
-        json.dumps([payout_entry]),
+        json.dumps(payout_entry),
     )
     if not row:
         raise ValueError("update_failed")
