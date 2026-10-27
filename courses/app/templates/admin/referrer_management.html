@@ -10,7 +10,11 @@
     {% if request.query_params.get('success') %}
         <div class="alert alert-success">
             <i class="bi bi-check-circle me-2"></i>
-            Запись реферера успешно создана.
+            {% if request.query_params.get('success') == 'payout' %}
+                Выплата успешно создана.
+            {% else %}
+                Запись реферера успешно создана.
+            {% endif %}
         </div>
     {% endif %}
 
@@ -18,10 +22,18 @@
         {% set err = request.query_params.get('error') %}
         <div class="alert alert-danger">
             <i class="bi bi-exclamation-triangle me-2"></i>
-            {% if err == 'not_referral' %}
-                У пользователя нет роли <code>referral</code>. Сначала измените роль.
+            {% if err == 'not_referral' or err == 'not_referrer' %}
+                У пользователя нет роли <code>referrer</code>. Сначала измените роль.
             {% elif err == 'create_failed' %}
                 Не удалось создать запись реферера.
+            {% elif err == 'referrer_not_found' %}
+                Реферер не найден.
+            {% elif err == 'amount_must_be_positive' %}
+                Сумма выплаты должна быть больше нуля.
+            {% elif err == 'amount_exceeds_available' %}
+                Сумма превышает доступный остаток (к выплате).
+            {% elif err == 'payout_failed' or err == 'update_failed' %}
+                Не удалось создать выплату.
             {% else %}
                 Произошла ошибка.
             {% endif %}
@@ -79,6 +91,7 @@
                                 <th>Выплачено</th>
                                 <th>К выплате</th>
                                 <th>Создан</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -95,11 +108,23 @@
                                 <td>{{ r.clients_count }}</td>
                                 <td>{{ '%.2f'|format(r.total_sales or 0) }} €</td>
                                 <td class="text-success fw-semibold">{{ '%.2f'|format(r.total_commission or 0) }} €</td>
-                                <td class="text-danger">{{ '%.2f'|format(r.total_payouts or 0) }} €</td>
-                                <td class="fw-semibold {% if (r.balance or 0) > 0 %}text-warning{% else %}text-muted{% endif %}">
+                                <td>{{ '%.2f'|format(r.total_payouts or 0) }} €</td>
+                                <td class="fw-semibold {% if (r.balance or 0) > 0 %}text-primary{% else %}text-muted{% endif %}">
                                     {{ '%.2f'|format(r.balance or 0) }} €
                                 </td>
                                 <td>{{ r.created_at.strftime('%d.%m.%Y') if r.created_at else '—' }}</td>
+                                <td>
+                                    <button type="button"
+                                            class="btn btn-outline-primary btn-sm"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#payoutModal"
+                                            data-user-id="{{ r.user_id }}"
+                                            data-referrer-name="{{ (r.last_name or '') ~ ' ' ~ (r.first_name or '') }}"
+                                            data-available="{{ '%.2f'|format(r.balance or 0) }}"
+                                            {% if (r.balance or 0) <= 0 %}disabled title="Нет доступной суммы"{% endif %}>
+                                        <i class="bi bi-cash-coin"></i> Выплата
+                                    </button>
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -179,11 +204,83 @@
                 </div>
             {% else %}
                 <div class="alert alert-secondary">
-                    Нет пользователей с ролью <code>referral</code>, которым ещё не создана запись.
+                    Нет пользователей с ролью <code>referrer</code>, которым ещё не создана запись.
                 </div>
             {% endif %}
         </div>
 
     </div>
 </div>
+
+<!-- Модальное окно создания выплаты -->
+<div class="modal fade" id="payoutModal" tabindex="-1" aria-labelledby="payoutModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/admin/referrer-management/payout/" id="payoutForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="user_id" id="payoutUserId" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="payoutModalLabel">Создание выплаты</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Реферер</label>
+                        <div class="fw-semibold" id="payoutReferrerName">—</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted">К выплате</label>
+                        <div class="fw-semibold text-primary" id="payoutAvailable">0.00 €</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="payoutAmount" class="form-label">Сумма, €</label>
+                        <input type="number"
+                               class="form-control"
+                               id="payoutAmount"
+                               name="amount"
+                               step="0.01"
+                               min="0.01"
+                               required>
+                        <div class="form-text">Не должна превышать сумму «К выплате».</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="payoutComment" class="form-label">Комментарий</label>
+                        <textarea class="form-control"
+                                  id="payoutComment"
+                                  name="comment"
+                                  rows="2"
+                                  maxlength="500"
+                                  placeholder="Например: выплата за октябрь 2026"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-lg me-1"></i> Создать выплату
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('payoutModal').addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    if (!button) return;
+
+    const userId = button.getAttribute('data-user-id');
+    const name = (button.getAttribute('data-referrer-name') || '').trim() || '—';
+    const available = button.getAttribute('data-available') || '0.00';
+
+    document.getElementById('payoutUserId').value = userId;
+    document.getElementById('payoutReferrerName').textContent = name;
+    document.getElementById('payoutAvailable').textContent = available + ' €';
+
+    const amountInput = document.getElementById('payoutAmount');
+    amountInput.value = '';
+    amountInput.max = available;
+    document.getElementById('payoutComment').value = '';
+});
+</script>
 {% endblock %}

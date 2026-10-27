@@ -17,7 +17,7 @@ from app.repositories.admin import (
     get_all_referrers_with_stats, get_users_with_referrer_role_without_record
 )
 from app.repositories.loyalty import award_useful_feedback
-from app.repositories.referrer import get_referrer_by_user_id, create_referrer
+from app.repositories.referrer import get_referrer_by_user_id, create_referrer, add_referrer_payout
 from app.repositories.shop import pay_order, replenish_balance_and_pay_order
 from app.repositories.user import create_user_session
 from app.routers.feedback import FEEDBACK_TOPICS
@@ -1572,6 +1572,41 @@ async def admin_referrer_management_create(
     )
 
 
+@router.post("/referrer-management/payout/")
+async def admin_referrer_payout(
+    request: Request,
+    pool: DBPoolDep,
+    current_superuser: CurrentSuperUser = None,
+    user_id: int = Form(...),
+    amount: float = Form(...),
+    comment: str = Form(""),
+    csrf_token=Depends(verify_csrf),
+):
+    """Создание выплаты рефереру (запись в referrers.payments с amount < 0)."""
+    if not current_superuser:
+        return RedirectResponse(
+            url=f"/{DEFAULT_SOURCE_LANGUAGE}/{DEFAULT_UI_LANGUAGE}/auth/login/",
+            status_code=303,
+        )
+
+    try:
+        await add_referrer_payout(pool, user_id, amount, comment)
+    except ValueError as e:
+        err = str(e)
+        return RedirectResponse(
+            url=f"/admin/referrer-management/?tab=list&error={err}",
+            status_code=303,
+        )
+    except Exception:
+        return RedirectResponse(
+            url="/admin/referrer-management/?tab=list&error=payout_failed",
+            status_code=303,
+        )
+
+    return RedirectResponse(
+        url="/admin/referrer-management/?tab=list&success=payout",
+        status_code=303,
+    )
 
 
 @router.get("/{table_name}/", response_class=HTMLResponse)
