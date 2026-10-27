@@ -44,20 +44,29 @@ async def get_all_referrers_with_stats(pool: Pool) -> list[dict[str, Any]]:
         d["clients_count"] = len(referral_ids) if isinstance(referral_ids, list) else 0
 
         total_sales = 0.0
+        total_commission = 0.0
+        total_payouts = 0.0
         for p in payments:
+            if not isinstance(p, dict):
+                continue
             try:
                 amount = float(p.get("amount") or 0)
             except (TypeError, ValueError):
                 amount = 0.0
+
             if amount > 0:
                 total_sales += amount
-
-        total_commission, total_payouts, balance = _calc_balance(payments)
+                try:
+                    total_commission += float(p.get("commission") or 0)
+                except (TypeError, ValueError):
+                    pass
+            elif amount < 0:
+                total_payouts += abs(amount)
 
         d["total_sales"] = round(total_sales, 2)
-        d["total_commission"] = total_commission
-        d["total_payouts"] = total_payouts
-        d["balance"] = balance
+        d["total_commission"] = round(total_commission, 2)
+        d["total_payouts"] = round(total_payouts, 2)
+        d["balance"] = round(total_commission - total_payouts, 2)
         result.append(d)
     return result
 

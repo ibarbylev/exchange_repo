@@ -211,15 +211,19 @@
                         <tr>
                             <td>{{ p.date or '' }}</td>
                             {% if amount > 0 %}
-                                <td><span class="badge bg-success">{{ _('Earned') }}</span></td>
-                                <td>{{ '%.2f'|format(amount) }} €</td>
-                                <td class="text-success font-weight-bold">{{ '%.2f'|format(p.commission|default(0)|float) }} €</td>
-                                <td>{{ _('User') }} #{{ p.user_id or '-' }}{% if p.order_id %}, {{ _('order') }} #{{ p.order_id }}{% endif %}</td>
+                            <td><span class="badge bg-success">{{ _('Earned') }}</span></td>
+                            <td>{{ '%.2f'|format(amount) }} €</td>
+                            <td class="text-success font-weight-bold">{{ '%.2f'|format(p.commission|default(0)|float) }} €</td>
+                            <td>
+                                {{ _('User') }} #{{ p.user_id or '-' }}
+                                {% if p.order_id %}, {{ _('order') }} #{{ p.order_id }}{% endif %}
+                                {% if p.comment %}<br><small class="text-muted">{{ p.comment }}</small>{% endif %}
+                            </td>
                             {% else %}
-                                <td><span class="badge bg-danger">{{ _('Payout') }}</span></td>
-                                <td class="text-danger">{{ '%.2f'|format(amount) }} €</td>
-                                <td>—</td>
-                                <td>{{ p.comment or '—' }}</td>
+                            <td><span class="badge bg-danger">{{ _('Payout') }}</span></td>
+                            <td class="text-danger">{{ '%.2f'|format(amount) }} €</td>
+                            <td>—</td>
+                            <td>{{ p.comment or '—' }}</td>
                             {% endif %}
                         </tr>
                         {% endfor %}
