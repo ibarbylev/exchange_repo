@@ -409,10 +409,11 @@ BEGIN
     SET payments = payments || jsonb_build_array(
         jsonb_build_object(
             'date',       to_char(NOW(), 'YYYY-MM-DD'),
-            'amount',     v_amount,
-            'commission', v_commission,
+            'amount',     v_amount,          -- сумма покупки клиента
+            'commission', v_commission,      -- вознаграждение реферера
             'user_id',    v_user_id,
-            'order_id',   p_order_id
+            'order_id',   p_order_id,
+            'comment',    'Commission ' || to_char(v_percent, 'FM999990.00') || '% from order #' || p_order_id
         )
     )
     WHERE id = v_referrer_pk;
