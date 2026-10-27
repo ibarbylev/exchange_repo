@@ -3,7 +3,7 @@
 {% block title %}Управление реферерами{% endblock %}
 
 {% block content %}
-<div class="container mt-4" style="max-width: 1300px;">
+<div class="container mt-4" style="max-width: 1400px;">
 
     <h2 class="mb-4">Управление реферерами</h2>
 
@@ -75,8 +75,9 @@
                                 <th>Комиссия, %</th>
                                 <th>Клиентов</th>
                                 <th>Сумма продаж</th>
-                                <th>Сумма вознаграждения</th>
-                                <th>Выплат</th>
+                                <th>Начислено</th>
+                                <th>Выплачено</th>
+                                <th>К выплате</th>
                                 <th>Создан</th>
                             </tr>
                         </thead>
@@ -94,7 +95,10 @@
                                 <td>{{ r.clients_count }}</td>
                                 <td>{{ '%.2f'|format(r.total_sales or 0) }} €</td>
                                 <td class="text-success fw-semibold">{{ '%.2f'|format(r.total_commission or 0) }} €</td>
-                                <td>{{ r.payments_count }}</td>
+                                <td class="text-danger">{{ '%.2f'|format(r.total_payouts or 0) }} €</td>
+                                <td class="fw-semibold {% if (r.balance or 0) > 0 %}text-warning{% else %}text-muted{% endif %}">
+                                    {{ '%.2f'|format(r.balance or 0) }} €
+                                </td>
                                 <td>{{ r.created_at.strftime('%d.%m.%Y') if r.created_at else '—' }}</td>
                             </tr>
                             {% endfor %}

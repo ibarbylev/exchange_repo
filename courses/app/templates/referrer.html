@@ -105,8 +105,20 @@
     </div>
 
     <!-- Stats -->
+    {% set total_commission = namespace(value=0) %}
+    {% set total_payouts = namespace(value=0) %}
+    {% for p in payments %}
+        {% set amount = p.amount|default(0)|float %}
+        {% if amount > 0 %}
+            {% set total_commission.value = total_commission.value + (p.commission|default(0)|float) %}
+        {% elif amount < 0 %}
+            {% set total_payouts.value = total_payouts.value + (-amount) %}
+        {% endif %}
+    {% endfor %}
+    {% set balance = total_commission.value - total_payouts.value %}
+
     <div class="row mb-4">
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <div class="card text-center h-100">
                 <div class="card-body">
                     <h3 class="text-success">{{ referrals|length }}</h3>
@@ -114,7 +126,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <div class="card text-center h-100">
                 <div class="card-body">
                     <h3 class="text-success">{{ referrer.commission_percent }}%</h3>
@@ -122,17 +134,21 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <div class="card text-center h-100">
                 <div class="card-body">
-                    <h3 class="text-success">
-                        {% set total_commission = namespace(value=0) %}
-                        {% for p in payments %}
-                            {% set total_commission.value = total_commission.value + (p.commission|default(0)|float) %}
-                        {% endfor %}
-                        {{ '%.2f'|format(total_commission.value) }} €
-                    </h3>
+                    <h3 class="text-success">{{ '%.2f'|format(total_commission.value) }} €</h3>
                     <p class="mb-0">{{ _('Total earned') }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card text-center h-100">
+                <div class="card-body">
+                    <h3 class="{% if balance > 0 %}text-warning{% else %}text-muted{% endif %}">
+                        {{ '%.2f'|format(balance) }} €
+                    </h3>
+                    <p class="mb-0">{{ _('Available for payout') }}</p>
                 </div>
             </div>
         </div>
@@ -183,18 +199,28 @@
                     <thead>
                         <tr>
                             <th>{{ _('Date') }}</th>
+                            <th>{{ _('Type') }}</th>
                             <th>{{ _('Amount') }}</th>
                             <th>{{ _('Commission') }}</th>
-                            <th>{{ _('User ID') }}</th>
+                            <th>{{ _('Details') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for p in payments %}
+                        {% set amount = p.amount|default(0)|float %}
                         <tr>
                             <td>{{ p.date or '' }}</td>
-                            <td>{{ p.amount or 0 }} €</td>
-                            <td class="text-success font-weight-bold">{{ p.commission or 0 }} €</td>
-                            <td>{{ p.user_id or '-' }}</td>
+                            {% if amount > 0 %}
+                                <td><span class="badge bg-success">{{ _('Earned') }}</span></td>
+                                <td>{{ '%.2f'|format(amount) }} €</td>
+                                <td class="text-success font-weight-bold">{{ '%.2f'|format(p.commission|default(0)|float) }} €</td>
+                                <td>{{ _('User') }} #{{ p.user_id or '-' }}{% if p.order_id %}, {{ _('order') }} #{{ p.order_id }}{% endif %}</td>
+                            {% else %}
+                                <td><span class="badge bg-danger">{{ _('Payout') }}</span></td>
+                                <td class="text-danger">{{ '%.2f'|format(amount) }} €</td>
+                                <td>—</td>
+                                <td>{{ p.comment or '—' }}</td>
+                            {% endif %}
                         </tr>
                         {% endfor %}
                     </tbody>
