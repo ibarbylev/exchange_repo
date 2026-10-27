@@ -1,10 +1,15 @@
 from asyncpg import Pool
 from typing import Any
+import json
 
 
 async def get_all_referrers_with_stats(pool: Pool) -> list[dict[str, Any]]:
     """
-    Возвращает всех рефереров вместе с данными пользователя и простой статистикой.
+    Возвращает всех рефереров вместе с данными пользователя и статистикой:
+    - clients_count: количество клиентов (рефералов)
+    - payments_count: количество записей о выплатах
+    - total_sales: сумма продаж (amount) по всем клиентам реферера
+    - total_commission: сумма вознаграждений (commission) по всем клиентам
     """
     rows = await pool.fetch(
         """
@@ -31,9 +36,40 @@ async def get_all_referrers_with_stats(pool: Pool) -> list[dict[str, Any]]:
     for row in rows:
         d = dict(row)
         referral_ids = d.get("referral_ids") or []
-        payments = d.get("payments") or []
-        d["referrals_count"] = len(referral_ids) if isinstance(referral_ids, list) else 0
-        d["payments_count"] = len(payments) if isinstance(payments, list) else 0
+        payments_raw = d.get("payments")
+
+        # payments может прийти как list или как JSON-строка
+        if payments_raw is None:
+            payments = []
+        elif isinstance(payments_raw, str):
+            try:
+                payments = json.loads(payments_raw)
+            except (json.JSONDecodeError, TypeError):
+                payments = []
+        elif isinstance(payments_raw, list):
+            payments = payments_raw
+        else:
+            payments = list(payments_raw) if payments_raw else []
+
+        d["clients_count"] = len(referral_ids) if isinstance(referral_ids, list) else 0
+        d["payments_count"] = len(payments)
+
+        total_sales = 0.0
+        total_commission = 0.0
+        for p in payments:
+            if not isinstance(p, dict):
+                continue
+            try:
+                total_sales += float(p.get("amount") or 0)
+            except (TypeError, ValueError):
+                pass
+            try:
+                total_commission += float(p.get("commission") or 0)
+            except (TypeError, ValueError):
+                pass
+
+        d["total_sales"] = round(total_sales, 2)
+        d["total_commission"] = round(total_commission, 2)
         result.append(d)
     return result
 
