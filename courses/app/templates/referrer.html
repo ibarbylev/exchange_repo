@@ -201,7 +201,7 @@
                             <th>{{ _('Date') }}</th>
                             <th>{{ _('Type') }}</th>
                             <th>{{ _('Purchase Amount') }}</th>
-                            <th>{{ _('Commission / Payments') }}</th>
+                            <th>{{ _('Commission / Payouts') }}</th>
                             <th>{{ _('Details') }}</th>
                         </tr>
                     </thead>
@@ -221,8 +221,8 @@
                             </td>
                             {% else %}
                             <td><span class="badge bg-danger">{{ _('Payout') }}</span></td>
-                            <td class="text-danger">{{ '%.2f'|format(amount) }} €</td>
                             <td>—</td>
+                            <td class="text-danger font-weight-bold">{{ '%.2f'|format(amount) }} €</td>
                             <td>{{ p.comment or '—' }}</td>
                             {% endif %}
                         </tr>
